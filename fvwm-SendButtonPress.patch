@@ -1,0 +1,188 @@
+Index: builtins.c
+===================================================================
+RCS file: /homes/gws/gjb/.CVS/fvwm/fvwm/builtins.c,v
+retrieving revision 1.16
+retrieving revision 1.18
+diff -u -r1.16 -r1.18
+--- builtins.c	1997/05/07 23:09:15	1.16
++++ builtins.c	1997/09/11 20:07:22	1.18
+@@ -909,6 +909,96 @@
+   XFlush (dpy);
+ }
+ 
++/* Stolen from GWM 1.8c --gjb */
++void
++fill_x_button_event(XButtonEvent *evt, int type, int button, int modifier, 
++		    int x, int y, int x_root, int y_root, Window child, Window sub_window)
++{
++    evt -> type = type;
++    evt -> display = dpy;
++    evt -> window = child;
++    evt -> subwindow = sub_window;
++    evt -> root = Scr.Root;
++    evt -> time = lastTimestamp + (type == ButtonPress? 0 : 5);
++    evt -> x = x;
++    evt -> y = y;
++    evt -> x_root = x_root;
++    evt -> y_root = y_root;
++    evt -> same_screen = 1;
++    evt -> button = button;
++    evt -> state = modifier;
++}
++
++Window
++WindowGettingButtonEvent(Window w, int x, int y)
++{
++    int x2, y2;
++    Window child, w2 = w;
++    XWindowAttributes wa;
++
++ find_window:
++    XTranslateCoordinates(dpy, w, w2, x, y, &x2, &y2, &child);
++    if (child) {
++	x = x2;
++	y = y2;
++	w = w2;
++	w2 = child;
++	goto find_window;
++    }
++    x = x2;
++    y = y2;
++    w = w2;
++
++ find_listener:
++    XGetWindowAttributes(dpy, w, &wa);
++    if (!(wa.all_event_masks & (ButtonPressMask | ButtonReleaseMask))) {
++	Window d1, *d3, parent;
++	unsigned int d4;
++	
++	XQueryTree(dpy, w, &d1, &parent, &d3, &d4);
++	if (d3) XFree(d3);
++	if (parent) {
++	    w = parent;
++	    goto find_listener;
++	}
++    }
++    return w;
++}
++
++/* Inspired by GWM 1.8c --gjb */
++void SendButtonPress(XEvent *eventp,Window w,FvwmWindow *tmp_win,
++		     unsigned long context, char *action, int *Module)
++{
++  char *szButton = strtok(action," \t\n");
++  char *szModifier = strtok(NULL," \t\n");
++  char *szPropagate = strtok(NULL," \t\n");
++  Window child;
++  XButtonEvent event;
++  int button = atoi(szButton);
++  int modifier = atoi(szModifier);
++  int propagate = atoi(szPropagate);
++  int x, y, x_root, y_root, x2, y2;
++  int JunkMask;
++  Window JunkRoot;
++  Window pointer_win, dummy;
++  XQueryPointer( dpy, w, &JunkRoot, &pointer_win,
++                 &x_root,&y_root,&x, &y, &JunkMask);
++
++  child = WindowGettingButtonEvent(pointer_win,x,y);
++  x2 = x; y2 = y;
++
++  XTranslateCoordinates(dpy, pointer_win, child, x2, y2,
++			  &x, &y, &dummy);
++  fill_x_button_event(&event, ButtonPress, button, modifier, 
++		      x, y, x_root, y_root, child, 0);
++  XSendEvent(dpy, PointerWindow, propagate, ButtonPressMask, 
++	     (XEvent *) &event);
++  fill_x_button_event(&event, ButtonRelease, button, modifier | (1 << (button+7)),
++		      x, y, x_root, y_root, child, 0);
++  XSendEvent(dpy, PointerWindow, propagate, ButtonReleaseMask, 
++	     (XEvent *) &event);
++  /*  fprintf(stderr,"New Sent button press of %d at %d, %d; time = %ld\n",button,x,y,lastTimestamp); */
++}
+ 
+ void stick_function(XEvent *eventp,Window w,FvwmWindow *tmp_win,
+ 		    unsigned long context, char *action, int *Module)
+@@ -1106,6 +1196,9 @@
+ {
+   if (action && *action)
+   {
++    int len = strlen(action);
++    if (action[len-1] == '\n')
++      action[len-1] = '\0'; /* drop the closing carraige return */
+     fvwm_msg(INFO,"Echo",action);
+   }
+ }
+@@ -2820,7 +2913,6 @@
+     char *szVar = NULL;
+     char *szValue = NULL;
+     char *szNoOverwrite = NULL;
+-    char *szPutenv = NULL;
+     Bool fOverwrite = TRUE;
+     action = GetNextToken(action,&szVar);
+     action = GetNextToken(action,&szValue);
+@@ -2830,12 +2922,15 @@
+ #ifdef USE_SETENV_CALL /* this call exists on linux */
+     setenv(szVar,szValue,fOverwrite?1:0);
+ #else
++    {
++    char *szPutenv = NULL;
+     if (fOverwrite == FALSE) {
+       fvwm_msg(WARN,"SetEnv","Ignoring NoOverwrite directive. Recompile with -DUSE_SETENV_CALL");
+     }
+     szPutenv = safemalloc(strlen(szVar)+strlen(szValue)+2);
+     sprintf(szPutenv,"%s=%s",szVar,szValue);
+     putenv(szPutenv);
++    }
+ #endif
+ }
+ 
+Index: functions.c
+===================================================================
+RCS file: /homes/gws/gjb/.CVS/fvwm/fvwm/functions.c,v
+retrieving revision 1.6
+retrieving revision 1.7
+diff -u -r1.6 -r1.7
+--- functions.c	1997/04/21 06:03:32	1.6
++++ functions.c	1997/09/11 18:53:43	1.7
+@@ -133,6 +133,7 @@
+   {"Restart",      restart_function, F_RESTART,             FUNC_NO_WINDOW},
+   {"KillModule",   module_zapper,    F_ZAP,                 FUNC_NO_WINDOW},
+   {"SendToModule", SendStrToModule,  F_SEND_STRING,         FUNC_NO_WINDOW},
++  {"SendButtonPress", SendButtonPress, F_SEND_BUTTONPRESS,  FUNC_NEEDS_WINDOW},
+   {"Scroll",       scroll,           F_SCROLL,              FUNC_NO_WINDOW},
+   {"Stick",        stick_function,   F_STICK,               FUNC_NEEDS_WINDOW},
+   {"Send_WindowList",send_list_func, F_SEND_WINDOW_LIST,    FUNC_NO_WINDOW},
+Index: misc.h
+===================================================================
+RCS file: /homes/gws/gjb/.CVS/fvwm/fvwm/misc.h,v
+retrieving revision 1.10
+retrieving revision 1.11
+diff -u -r1.10 -r1.11
+--- misc.h	1997/05/07 23:11:16	1.10
++++ misc.h	1997/09/11 18:53:48	1.11
+@@ -510,6 +510,8 @@
+ void SetBorderStyle(XEvent *eventp,Window w,FvwmWindow *tmp_win,
+ 		    unsigned long context, char *action,int* Module);
+ #endif
++void SendButtonPress(XEvent *eventp,Window w,FvwmWindow *tmp_win,
++		     unsigned long context, char *action, int *Module);
+ void SetMenuStyle(XEvent *eventp,Window w,FvwmWindow *tmp_win,
+ 		unsigned long context, char *action,int* Module);
+ void SetTitleStyle(XEvent *eventp,Window w,FvwmWindow *tmp_win,
+Index: parse.h
+===================================================================
+RCS file: /homes/gws/gjb/.CVS/fvwm/fvwm/parse.h,v
+retrieving revision 1.5
+retrieving revision 1.6
+diff -u -r1.5 -r1.6
+--- parse.h	1997/04/21 06:22:09	1.5
++++ parse.h	1997/09/11 18:53:50	1.6
+@@ -75,6 +75,7 @@
+     F_COLORMAP_FOCUS,
+     F_TITLESTYLE,
+     F_EXEC_SETUP,
++    F_SEND_BUTTONPRESS,
+     F_SETENV,
+     F_SET_ANIMATION,
+     F_SET_MENUDELAY,

@@ -1,0 +1,121 @@
+*** windows.c	Wed May 15 17:00:19 1996
+--- windows.c.mine	Wed May 15 17:00:12 1996
+***************
+*** 48,57 ****
+    int val1, val2, val1_unit,val2_unit,n;
+    char *t_hot;			/* Menu label with hotkey added */
+    char scut = '0';		/* Current short cut key */
+  
+    n = GetTwoArguments(action, &val1, &val2, &val1_unit, &val2_unit);
+  
+!   sprintf(tlabel,"CurrentDesk: %d\tGeometry",Scr.CurrentDesk);
+    mr=NewMenuRoot(tlabel,0);
+    AddToMenu(mr, tlabel, "TITLE");      
+  
+--- 48,66 ----
+    int val1, val2, val1_unit,val2_unit,n;
+    char *t_hot;			/* Menu label with hotkey added */
+    char scut = '0';		/* Current short cut key */
++   int fOnlyIcons;
+  
+    n = GetTwoArguments(action, &val1, &val2, &val1_unit, &val2_unit);
+  
+!   fOnlyIcons = (val2 < 0);
+!   if ( val2 < 0 )
+!     val2 = -val2;
+! 
+!   if (!fOnlyIcons)
+!     sprintf(tlabel,"CurrentDesk: %d\tGeometry",Scr.CurrentDesk);
+!   else
+!     sprintf(tlabel,"CurrentDesk: %d\tIcons",Scr.CurrentDesk);
+! 
+    mr=NewMenuRoot(tlabel,0);
+    AddToMenu(mr, tlabel, "TITLE");      
+  
+***************
+*** 88,93 ****
+--- 97,104 ----
+  	  if((t->Desk == next_desk)&&
+  	    (!(t->flags & WINDOWLISTSKIP)))
+  	    {
++ 	      if (fOnlyIcons && ! (t->flags & ICONIFIED))
++ 		continue;
+  	      if (++scut == ('9' + 1)) scut = 'A';	/* Next shortcut key */
+  	      if(val1%2 != 0)
+  		name = t->icon_name;
+***************
+*** 98,132 ****
+  	      
+  	      tname = safemalloc(40);
+  	      tname[0]=0;
+! 	      if(t->flags & ICONIFIED)
+! 		strcpy(tname, "(");
+! 	      sprintf(loc,"%d:",t->Desk);
+! 	      strcat(tname,loc);
+! 	      if(t->frame_x >=0)
+! 		sprintf(loc,"+%d",t->frame_x);
+! 	      else
+! 		sprintf(loc,"%d",t->frame_x);
+! 	      strcat(tname, loc);
+! 	      if(t->frame_y >=0)
+! 		sprintf(loc,"+%d",t->frame_y);
+! 	      else
+! 		sprintf(loc,"%d",t->frame_y);
+! 	      strcat(tname, loc);
+! 	      dheight = t->frame_height - t->title_height - 2*t->boundary_width;
+! 	      dwidth = t->frame_width - 2*t->boundary_width;
+! 	      
+! 	      dwidth -= t->hints.base_width;
+! 	      dheight -= t->hints.base_height;
+! 	      
+! 	      dwidth /= t->hints.width_inc;
+! 	      dheight /= t->hints.height_inc;
+  
+! 	      sprintf(loc,"x%d",dwidth);
+! 	      strcat(tname, loc);
+! 	      sprintf(loc,"x%d",dheight);
+! 	      strcat(tname, loc);
+! 	      if(t->flags & ICONIFIED)
+! 		strcat(tname, ")");
+  	      sprintf(tlabel,"RAISE_IT %ld %ld",t,t->w);
+  	      strcat(t_hot,"\t");
+  	      strcat(t_hot,tname);
+--- 109,146 ----
+  	      
+  	      tname = safemalloc(40);
+  	      tname[0]=0;
+! 	      if (!fOnlyIcons)
+! 		{
+! 		if(t->flags & ICONIFIED)
+! 		  strcpy(tname, "(");
+! 		sprintf(loc,"%d:",t->Desk);
+! 		strcat(tname,loc);
+! 		if(t->frame_x >=0)
+! 		  sprintf(loc,"+%d",t->frame_x);
+! 		else
+! 		  sprintf(loc,"%d",t->frame_x);
+! 		strcat(tname, loc);
+! 		if(t->frame_y >=0)
+! 		  sprintf(loc,"+%d",t->frame_y);
+! 		else
+! 		  sprintf(loc,"%d",t->frame_y);
+! 		strcat(tname, loc);
+! 		dheight = t->frame_height - t->title_height - 2*t->boundary_width;
+! 		dwidth = t->frame_width - 2*t->boundary_width;
+! 
+! 		dwidth -= t->hints.base_width;
+! 		dheight -= t->hints.base_height;
+! 
+! 		dwidth /= t->hints.width_inc;
+! 		dheight /= t->hints.height_inc;
+  
+! 		sprintf(loc,"x%d",dwidth);
+! 		strcat(tname, loc);
+! 		sprintf(loc,"x%d",dheight);
+! 		strcat(tname, loc);
+! 		if(t->flags & ICONIFIED)
+! 		  strcat(tname, ")");
+! 		}
+  	      sprintf(tlabel,"RAISE_IT %ld %ld",t,t->w);
+  	      strcat(t_hot,"\t");
+  	      strcat(t_hot,tname);

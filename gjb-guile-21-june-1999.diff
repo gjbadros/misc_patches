@@ -1,0 +1,662 @@
+? gjb.diffs
+? build/Makefile
+? doc/Makefile
+? libguile/test.c
+? qt/qt.lo
+? qt/qtmds.lo
+? qt/qtmdc.lo
+? qt/libqthreads.la
+cvs server: Diffing .
+cvs server: Diffing build
+cvs server: Diffing doc
+cvs server: Diffing doc/example-smob
+cvs server: Diffing guile-config
+cvs server: Diffing ice-9
+cvs server: Diffing lang
+cvs server: Diffing libguile
+Index: libguile/__scm.h
+===================================================================
+RCS file: /egcs/carton/cvsfiles/guile/guile-core/libguile/__scm.h,v
+retrieving revision 1.28
+diff -u -p -r1.28 __scm.h
+--- __scm.h	1999/02/12 10:13:17	1.28
++++ __scm.h	1999/06/21 15:59:26
+@@ -254,10 +254,10 @@ typedef long SCM_STACKITEM;
+ extern unsigned int scm_async_clock;
+ 
+ #define SCM_ASYNC_TICK \
+-{ \
++do { \
+   if (0 == --scm_async_clock) \
+     scm_async_click (); \
+-} \
++} while (0)
+ 
+ #ifdef SCM_CAREFUL_INTS
+ #define SCM_CHECK_NOT_DISABLED \
+@@ -296,25 +296,25 @@ extern unsigned int scm_async_clock;
+ #endif
+ 
+ #define SCM_DEFER_INTS \
+-{ \
++do { \
+   SCM_FENCE; \
+   SCM_CHECK_NOT_DISABLED; \
+   SCM_THREAD_DEFER; \
+   SCM_FENCE; \
+   scm_ints_disabled = 1; \
+   SCM_FENCE; \
+-} \
++} while (0)
+ 
+ 
+ #define SCM_ALLOW_INTS_ONLY \
+-{ \
++do { \
+   SCM_THREAD_ALLOW; \
+   scm_ints_disabled = 0; \
+-} \
++} while (0)
+ 
+ 
+ #define SCM_ALLOW_INTS \
+-{ \
++do { \
+   SCM_FENCE; \
+   SCM_CHECK_NOT_ENABLED; \
+   SCM_THREAD_SWITCHING_CODE; \
+@@ -324,20 +324,20 @@ extern unsigned int scm_async_clock;
+   SCM_THREAD_ALLOW; \
+   SCM_ASYNC_TICK; \
+   SCM_FENCE; \
+-} \
++} while (0)
+ 
+ 
+ #define SCM_REDEFER_INTS  \
+-{ \
++do { \
+   SCM_FENCE; \
+   SCM_THREAD_REDEFER; \
+   ++scm_ints_disabled; \
+   SCM_FENCE; \
+-} \
++} while (0)
+ 
+ 
+ #define SCM_REALLOW_INTS \
+-{ \
++do { \
+   SCM_FENCE; \
+   SCM_THREAD_REALLOW_1; \
+   SCM_THREAD_SWITCHING_CODE; \
+@@ -349,14 +349,14 @@ extern unsigned int scm_async_clock;
+       SCM_ASYNC_TICK; \
+     } \
+   SCM_FENCE; \
+-} \
++} while (0)
+ 
+ 
+ #define SCM_TICK \
+-{ \
++do { \
+   SCM_DEFER_INTS; \
+   SCM_ALLOW_INTS; \
+-} \
++} while (0)
+ 
+ 
+ 
+Index: libguile/arbiters.c
+===================================================================
+RCS file: /egcs/carton/cvsfiles/guile/guile-core/libguile/arbiters.c,v
+retrieving revision 1.9
+diff -u -p -r1.9 arbiters.c
+--- arbiters.c	1999/05/23 09:55:53	1.9
++++ arbiters.c	1999/06/21 15:59:26
+@@ -65,7 +65,7 @@ prinarb (exp, port, pstate)
+      scm_print_state *pstate;
+ {
+   scm_puts ("#<arbiter ", port);
+-  if (SCM_CAR (exp) & (1L << 16))
++  if (SCM2LNG(SCM_CAR (exp)) & (1L << 16))
+     scm_puts ("locked ", port);
+   scm_iprin1 (SCM_CDR (exp), port, pstate);
+   scm_putc ('>', port);
+@@ -91,7 +91,7 @@ scm_try_arbiter (arb)
+ {
+   SCM_ASSERT ((SCM_TYP16 (arb) == scm_tc16_arbiter), arb, SCM_ARG1, s_try_arbiter);
+   SCM_DEFER_INTS;
+-  if (SCM_CAR (arb) & (1L << 16))
++  if (SCM2LNG(SCM_CAR (arb)) & (1L << 16))
+     arb = SCM_BOOL_F;
+   else
+     {
+@@ -110,7 +110,7 @@ scm_release_arbiter (arb)
+      SCM arb;
+ {
+   SCM_ASSERT ((SCM_TYP16 (arb) == scm_tc16_arbiter), arb, SCM_ARG1, s_release_arbiter);
+-  if (!(SCM_CAR (arb) & (1L << 16)))
++  if (!(SCM2LNG(SCM_CAR (arb)) & (1L << 16)))
+     return SCM_BOOL_F;
+   SCM_SETCAR (arb, scm_tc16_arbiter);
+   return SCM_BOOL_T;
+Index: libguile/async.c
+===================================================================
+RCS file: /egcs/carton/cvsfiles/guile/guile-core/libguile/async.c,v
+retrieving revision 1.19
+diff -u -p -r1.19 async.c
+--- async.c	1999/05/23 09:55:54	1.19
++++ async.c	1999/06/21 15:59:26
+@@ -263,6 +263,21 @@ scm_switch ()
+ 
+ 
+ 
++static int print_async SCM_P ((SCM exp, SCM port, scm_print_state *pstate));
++
++static int
++print_async (exp, port, pstate)
++     SCM exp;
++     SCM port;
++     scm_print_state *pstate;
++{
++  scm_puts ("#<async ", port);
++  scm_intprint(SCM2LNG(exp), 16, port);
++  scm_putc('>', port);
++  return 1;
++}
++
++
+ static SCM mark_async SCM_P ((SCM obj));
+ 
+ static SCM
+Index: libguile/chars.h
+===================================================================
+RCS file: /egcs/carton/cvsfiles/guile/guile-core/libguile/chars.h,v
+retrieving revision 1.6
+diff -u -p -r1.6 chars.h
+--- chars.h	1999/02/06 12:29:08	1.6
++++ chars.h	1999/06/21 15:59:26
+@@ -51,7 +51,7 @@
+  */
+ #define SCM_ICHRP(x)	(SCM_ITAG8(x) == scm_tc8_char)
+ #define SCM_ICHR(x)	((unsigned int)SCM_ITAG8_DATA(x))
+-#define SCM_MAKICHR(x)	SCM_MAKE_ITAG8(x, scm_tc8_char)
++#define SCM_MAKICHR(x)	PTR2SCM(SCM_MAKE_ITAG8(x, scm_tc8_char))
+ 
+ 
+ 
+Index: libguile/continuations.c
+===================================================================
+RCS file: /egcs/carton/cvsfiles/guile/guile-core/libguile/continuations.c,v
+retrieving revision 1.12
+diff -u -p -r1.12 continuations.c
+--- continuations.c	1998/10/19 21:35:11	1.12
++++ continuations.c	1999/06/21 15:59:27
+@@ -132,7 +132,7 @@ grow_throw (a)
+   SCM growth[100];
+   growth[0] = a[0];
+   growth[1] = a[1];
+-  growth[2] = a[2] + 1;
++  growth[2] = PTR2SCM(SCM2LNG(a[2]) + 1);
+   growth[3] = (SCM) a;
+   scm_dynthrow (growth);
+ }
+Index: libguile/coop-threads.c
+===================================================================
+RCS file: /egcs/carton/cvsfiles/guile/guile-core/libguile/coop-threads.c,v
+retrieving revision 1.10
+diff -u -p -r1.10 coop-threads.c
+--- coop-threads.c	1998/10/03 13:33:49	1.10
++++ coop-threads.c	1999/06/21 15:59:27
+@@ -246,7 +246,7 @@ scheme_launch_thread (void *p)
+      list given as argument to launch_thread.  It will be marked
+      during the conservative sweep of the stack. */
+   register SCM argl = (SCM) p;
+-  SCM thread = SCM_CAR (argl);
++  SCM_STACKITEM thread = SCM_CAR (argl);
+   scheme_launch_data data;
+   data.rootcont = SCM_BOOL_F;
+   data.body = SCM_CADR (argl);
+@@ -365,7 +365,7 @@ c_launch_thread (void *p)
+ {
+   register c_launch_data *data = (c_launch_data *) p;
+   /* The thread object will be GC protected by being on this stack */
+-  SCM thread = data->u.thread;
++  SCM_STACKITEM thread = data->u.thread;
+   /* We must use the address of `thread', otherwise the compiler will
+      optimize it away.  This is OK since the longest SCM_STACKITEM
+      also is a long.  */
+Index: libguile/debug.c
+===================================================================
+RCS file: /egcs/carton/cvsfiles/guile/guile-core/libguile/debug.c,v
+retrieving revision 1.39
+diff -u -p -r1.39 debug.c
+--- debug.c	1999/03/19 02:26:12	1.39
++++ debug.c	1999/06/21 15:59:27
+@@ -89,7 +89,7 @@ scm_debug_options (setting)
+   SCM_RESET_DEBUG_MODE;
+   scm_stack_checking_enabled_p = SCM_STACK_CHECKING_P;
+   scm_debug_eframe_size = 2 * SCM_N_FRAMES;
+-  SCM_ALLOW_INTS
++  SCM_ALLOW_INTS;
+   return ans;
+ }
+ 
+@@ -285,7 +285,7 @@ scm_make_gloc (var, env)
+ 		env,
+ 		SCM_ARG2,
+ 		s_make_gloc);
+-  return scm_make_memoized (SCM_VARVCELL (var) + 1, env);
++  return scm_make_memoized (PTR2SCM(SCM2LNG(SCM_VARVCELL (var)) + 1), env);
+ }
+ 
+ SCM_PROC (s_gloc_p, "gloc?", 1, 0, 0, scm_gloc_p);
+@@ -296,7 +296,7 @@ scm_gloc_p (obj)
+ {
+   return ((SCM_NIMP (obj)
+ 	   && SCM_MEMOIZEDP (obj)
+-	   && (SCM_MEMOIZED_EXP (obj) & 7) == 1)
++	   && (SCM2LNG(SCM_MEMOIZED_EXP (obj)) & 7) == 1)
+ 	  ? SCM_BOOL_T
+ 	  : SCM_BOOL_F);
+ }
+@@ -311,10 +311,10 @@ scm_make_iloc (frame, binding, cdrp)
+ {
+   SCM_ASSERT (SCM_INUMP (frame), frame, SCM_ARG1, s_make_iloc);
+   SCM_ASSERT (SCM_INUMP (binding), binding, SCM_ARG2, s_make_iloc);
+-  return (SCM_ILOC00
+-	  + SCM_IFRINC * SCM_INUM (frame)
+-	  + (SCM_NFALSEP (cdrp) ? SCM_ICDR : 0)
+-	  + SCM_IDINC * SCM_INUM (binding));
++  return PTR2SCM(SCM_ILOC00
++                 + SCM_IFRINC * SCM_INUM (frame)
++                 + (SCM_NFALSEP (cdrp) ? SCM_ICDR : 0)
++                 + SCM_IDINC * SCM_INUM (binding));
+ }
+ 
+ SCM_PROC (s_iloc_p, "iloc?", 1, 0, 0, scm_iloc_p);
+@@ -584,7 +584,7 @@ prindebugobj (obj, port, pstate)
+      scm_print_state *pstate;
+ {
+   scm_puts ("#<debug-object ", port);
+-  scm_intprint (SCM_DEBUGOBJ_FRAME (obj), 16, port);
++  scm_intprint (SCM2LNG(SCM_DEBUGOBJ_FRAME (obj)), 16, port);
+   scm_putc ('>', port);
+   return 1;
+ }
+Index: libguile/dynl.c
+===================================================================
+RCS file: /egcs/carton/cvsfiles/guile/guile-core/libguile/dynl.c,v
+retrieving revision 1.16
+diff -u -p -r1.16 dynl.c
+--- dynl.c	1999/02/06 12:30:12	1.16
++++ dynl.c	1999/06/21 15:59:27
+@@ -373,7 +373,7 @@ get_dynl_obj (dobj, subr, argn)
+      int argn;
+ {
+     struct dynl_obj *d;
+-    SCM_ASSERT (SCM_NIMP (dobj) && SCM_CAR (dobj) == scm_tc16_dynamic_obj,
++    SCM_ASSERT (SCM_NIMP (dobj) && SCM_CARLNG (dobj) == scm_tc16_dynamic_obj,
+ 		dobj, argn, subr);
+     d = (struct dynl_obj *)SCM_CDR (dobj);
+     SCM_ASSERT (d->handle != NULL, dobj, argn, subr);
+@@ -385,7 +385,7 @@ SCM_PROC (s_dynamic_object_p, "dynamic-o
+ SCM
+ scm_dynamic_object_p (SCM obj)
+ {
+-    return (SCM_NIMP (obj) && SCM_CAR (obj) == scm_tc16_dynamic_obj)?
++    return (SCM_NIMP (obj) && SCM_CARLNG (obj) == scm_tc16_dynamic_obj)?
+ 	SCM_BOOL_T : SCM_BOOL_F;
+ }
+ 
+Index: libguile/dynwind.c
+===================================================================
+RCS file: /egcs/carton/cvsfiles/guile/guile-core/libguile/dynwind.c,v
+retrieving revision 1.9
+diff -u -p -r1.9 dynwind.c
+--- dynwind.c	1998/10/19 21:35:17	1.9
++++ dynwind.c	1999/06/21 15:59:28
+@@ -98,7 +98,7 @@ typedef struct guardsmem {
+ #define SCM_BEFORE_GUARD(obj) (SCM_GUARDSMEM (obj)->before)
+ #define SCM_AFTER_GUARD(obj) (SCM_GUARDSMEM (obj)->after)
+ #define SCM_GUARD_DATA(obj) (SCM_GUARDSMEM (obj)->data)
+-#define SCM_GUARDSP(obj) (SCM_CAR (obj) == tc16_guards)
++#define SCM_GUARDSP(obj) (SCM_CARLNG(obj) == tc16_guards)
+ 
+ static long tc16_guards;
+ 
+@@ -113,7 +113,7 @@ static int
+ printguards (SCM exp, SCM port, scm_print_state *pstate)
+ {
+   scm_puts ("#<guards ", port);
+-  scm_intprint (SCM_CDR (exp), 16, port);
++  scm_intprint (SCM2LNG(SCM_CDR (exp)), 16, port);
+   scm_putc ('>', port);
+   return 1;
+ }
+Index: libguile/eval.c
+===================================================================
+RCS file: /egcs/carton/cvsfiles/guile/guile-core/libguile/eval.c,v
+retrieving revision 1.89
+diff -u -p -r1.89 eval.c
+--- eval.c	1999/06/19 20:21:04	1.89
++++ eval.c	1999/06/21 15:59:30
+@@ -1447,7 +1447,7 @@ scm_evaluator_traps (setting)
+ 		     SCM_N_EVALUATOR_TRAPS,
+ 		     s_evaluator_traps);
+   SCM_RESET_DEBUG_MODE;
+-  SCM_ALLOW_INTS
++  SCM_ALLOW_INTS;
+   return ans;
+ }
+ 
+Index: libguile/eval.h
+===================================================================
+RCS file: /egcs/carton/cvsfiles/guile/guile-core/libguile/eval.h,v
+retrieving revision 1.25
+diff -u -p -r1.25 eval.h
+--- eval.h	1999/03/19 02:27:41	1.25
++++ eval.h	1999/06/21 15:59:30
+@@ -83,7 +83,7 @@ extern SCM scm_eval_options_interface SC
+ #define SCM_IDSTMSK		(-SCM_IDINC)
+ #define SCM_IFRAME(n) 		((int)((SCM_ICDR-SCM_IFRINC)>>8) & ((int)(n)>>8))
+ #define SCM_IDIST(n) 		(((unsigned long)(n))>>20)
+-#define SCM_ICDRP(n) 		(SCM_ICDR & (n))
++#define SCM_ICDRP(n) 		(SCM_ICDR & SCM2LNG(n))
+ 
+ 
+ 
+Index: libguile/numbers.h
+===================================================================
+RCS file: /egcs/carton/cvsfiles/guile/guile-core/libguile/numbers.h,v
+retrieving revision 1.18
+diff -u -p -r1.18 numbers.h
+--- numbers.h	1999/04/17 16:03:31	1.18
++++ numbers.h	1999/06/21 15:59:31
+@@ -68,9 +68,9 @@
+ /* shifts of more than one are done by a library call, single shifts are
+  * performed in registers
+  */
+-# define SCM_MAKINUM(x) ((((x)<<1)<<1)+2L)
++# define SCM_MAKINUM(x) ((SCM)((((x)<<1)<<1)+2L))
+ #else
+-# define SCM_MAKINUM(x) (((x)<<2)+2L)
++# define SCM_MAKINUM(x) ((SCM)(((x)<<2)+2L))
+ #endif /* def __TURBOC__ */
+ 
+ 
+@@ -83,11 +83,11 @@
+ # ifdef __TURBOC__
+ #  define SCM_INUM(x) (((x)>>1)>>1)
+ # else
+-#  define SCM_INUM(x) SCM_SRS(x, 2)
++#  define SCM_INUM(x) SCM_SRS(SCM2LNG(x), 2)
+ # endif /* def __TURBOC__ */
+ #else
+ # define SCM_SRS(x, y) (((x)<0) ? ~((~(x))>>y) : (x)>>y)
+-# define SCM_INUM(x) SCM_SRS(x, 2)
++# define SCM_INUM(x) ((SCM)SCM_SRS(SCM2LNG(x), 2))
+ #endif /*  (-1==(((-1)<<2)+2)>>2) && (__TURBOC__ != 0x295) */
+ 
+ 
+Index: libguile/pairs.h
+===================================================================
+RCS file: /egcs/carton/cvsfiles/guile/guile-core/libguile/pairs.h,v
+retrieving revision 1.9
+diff -u -p -r1.9 pairs.h
+--- pairs.h	1998/12/05 18:52:15	1.9
++++ pairs.h	1999/06/21 15:59:31
+@@ -99,6 +99,7 @@ typedef SCM  huge *SCMPTR;
+  */
+ 
+ #define SCM_CAR(x) (((scm_cell *)(SCM2PTR(x)))->car)
++#define SCM_CARLNG(x) (SCM2LNG(SCM_CAR(x)))
+ #define SCM_CDR(x) (((scm_cell *)(SCM2PTR(x)))->cdr)
+ #define SCM_GCCDR(x) (~1L & SCM_CDR(x))
+ #define SCM_SETCAR(x, v) (SCM_CAR(x) = (SCM)(v))
+Index: libguile/ports.h
+===================================================================
+RCS file: /egcs/carton/cvsfiles/guile/guile-core/libguile/ports.h,v
+retrieving revision 1.37
+diff -u -p -r1.37 ports.h
+--- ports.h	1999/06/16 08:53:46	1.37
++++ ports.h	1999/06/21 15:59:31
+@@ -142,12 +142,17 @@ extern int scm_port_table_size; /* Numbe
+ #define SCM_CUC		(~SCM_CRDY)
+ 
+ #define SCM_PORTP(x) (SCM_TYP7(x)==scm_tc7_port)
+-#define SCM_OPPORTP(x) (((0x7f | SCM_OPN) & SCM_CAR(x))==(scm_tc7_port | SCM_OPN))
+-#define SCM_OPINPORTP(x) (((0x7f | SCM_OPN | SCM_RDNG) & SCM_CAR(x))==(scm_tc7_port | SCM_OPN | SCM_RDNG))
+-#define SCM_OPOUTPORTP(x) (((0x7f | SCM_OPN | SCM_WRTNG) & SCM_CAR(x))==(scm_tc7_port | SCM_OPN | SCM_WRTNG))
+-#define SCM_INPORTP(x) (((0x7f | SCM_RDNG) & SCM_CAR(x))==(scm_tc7_port | SCM_RDNG))
+-#define SCM_OUTPORTP(x) (((0x7f | SCM_WRTNG) & SCM_CAR(x))==(scm_tc7_port | SCM_WRTNG))
+-#define SCM_OPENP(x) (SCM_OPN & SCM_CAR(x))
++#define SCM_OPPORTP(x) (((0x7f | SCM_OPN) & SCM_CARLNG(x))==(scm_tc7_port | SCM_OPN))
++#define SCM_OPINPORTP(x) (((0x7f | SCM_OPN | SCM_RDNG) & SCM_CARLNG(x))==(scm_tc7_port | SCM_OPN | SCM_RDNG))
++#define SCM_OPOUTPORTP(x) (((0x7f | SCM_OPN | SCM_WRTNG) & SCM_CARLNG(x))==(scm_tc7_port | SCM_OPN | SCM_WRTNG))
++#define SCM_FPORTP(x) (SCM_TYP16S(x)==scm_tc7_port)
++#define SCM_OPFPORTP(x) (((0xfeff | SCM_OPN) & SCM_CARLNG(x))==(scm_tc7_port | SCM_OPN))
++#define SCM_OPINFPORTP(x) (((0xfeff | SCM_OPN | SCM_RDNG) & SCM_CARLNG(x))==(scm_tc7_port | SCM_OPN | SCM_RDNG))
++#define SCM_OPOUTFPORTP(x) (((0xfeff | SCM_OPN | SCM_WRTNG) & SCM_CARLNG(x))==(scm_tc7_port | SCM_OPN | SCM_WRTNG))
++
++#define SCM_INPORTP(x) (((0x7f | SCM_RDNG) & SCM_CARLNG(x))==(scm_tc7_port | SCM_RDNG))
++#define SCM_OUTPORTP(x) (((0x7f | SCM_WRTNG) & SCM_CARLNG(x))==(scm_tc7_port | SCM_WRTNG))
++#define SCM_OPENP(x) (SCM_OPN & SCM_CARLNG(x))
+ #define SCM_CLOSEDP(x) (!SCM_OPENP(x))
+ #define SCM_PTAB_ENTRY(x) ((scm_port *) SCM_CDR(x))
+ #define SCM_SETPTAB_ENTRY(x,ent) SCM_SETCDR ((x), (SCM)(ent))
+@@ -158,7 +163,7 @@ extern int scm_port_table_size; /* Numbe
+ #define SCM_COL(x) SCM_PTAB_ENTRY(x)->column_number
+ #define SCM_REVEALED(x) SCM_PTAB_ENTRY(x)->revealed
+ #define SCM_SETREVEALED(x,s) (SCM_PTAB_ENTRY(x)->revealed = s)
+-#define SCM_CRDYP(port) (SCM_CAR (port) & SCM_CRDY)
++#define SCM_CRDYP(port) (SCM_CARLNG(port) & SCM_CRDY)
+ #define SCM_SETRDY(port) {SCM_SETOR_CAR (port, SCM_CRDY);}
+ #define SCM_CUNGET(c, port) \
+ { \
+@@ -218,7 +223,7 @@ typedef struct scm_ptobfuns
+   int (*input_waiting_p) (SCM port);
+ } scm_ptobfuns;
+ 
+-#define SCM_PTOBNUM(x) (0x0ff & (SCM_CAR(x)>>8))
++#define SCM_PTOBNUM(x) (0x0ff & (SCM_CARLNG(x)>>8))
+ 
+ 
+ 
+Index: libguile/procs.h
+===================================================================
+RCS file: /egcs/carton/cvsfiles/guile/guile-core/libguile/procs.h,v
+retrieving revision 1.15
+diff -u -p -r1.15 procs.h
+--- procs.h	1999/05/02 17:22:47	1.15
++++ procs.h	1999/06/21 15:59:31
+@@ -70,7 +70,7 @@ typedef struct scm_dsubr
+   double (*dproc) ();
+ } scm_dsubr;
+ 
+-#define SCM_SNAME(x) ((SCM_CAR(x)>>8)?(SCM)(scm_heap_org+(SCM_CAR(x)>>8)):scm_nullstr)
++#define SCM_SNAME(x) ((SCM_CARLNG(x)>>8)?(SCM)(scm_heap_org+(SCM_CARLNG(x)>>8)):scm_nullstr)
+ #define SCM_SUBRF(x) (((scm_subr *)(SCM2PTR(x)))->cproc)
+ #define SCM_DSUBRF(x) (((scm_dsubr *)(SCM2PTR(x)))->dproc)
+ #define SCM_CCLO_SUBR(x) (SCM_VELTS(x)[0])
+@@ -79,7 +79,7 @@ typedef struct scm_dsubr
+  */
+ 
+ #define SCM_CLOSUREP(x) (SCM_TYP3(x)==scm_tc3_closure)
+-#define SCM_CLOSCAR(x) (SCM_CAR(x)-scm_tc3_closure)
++#define SCM_CLOSCAR(x) (SCM_CARLNG(x)-scm_tc3_closure)
+ #define SCM_CODE(x) SCM_CAR(SCM_CLOSCAR (x))
+ #define SCM_PROCPROPS(x) SCM_CDR(SCM_CLOSCAR (x))
+ #define SCM_SETPROCPROPS(x, p) SCM_SETCDR(SCM_CLOSCAR (x), p)
+Index: libguile/smob.h
+===================================================================
+RCS file: /egcs/carton/cvsfiles/guile/guile-core/libguile/smob.h,v
+retrieving revision 1.16
+diff -u -p -r1.16 smob.h
+--- smob.h	1999/05/23 09:57:31	1.16
++++ smob.h	1999/06/21 15:59:31
+@@ -81,7 +81,7 @@ typedef struct scm_smobfuns
+ #define SCM_SMOB_DATA(x) SCM_CDR (x)
+ #define SCM_SET_SMOB_DATA(x, data) SCM_SETCDR (x, data)
+ #define SCM_TC2SMOBNUM(x) (0x0ff & ((x) >> 8))
+-#define SCM_SMOBNUM(x) (SCM_TC2SMOBNUM (SCM_CAR (x)))
++#define SCM_SMOBNUM(x) (SCM_TC2SMOBNUM (SCM_CARLNG(x)))
+ #define SCM_SMOBNAME(smobnum) scm_smobs[smobnum].name
+ 
+ extern int scm_numsmob;
+Index: libguile/stacks.h
+===================================================================
+RCS file: /egcs/carton/cvsfiles/guile/guile-core/libguile/stacks.h,v
+retrieving revision 1.8
+diff -u -p -r1.8 stacks.h
+--- stacks.h	1998/09/30 10:14:58	1.8
++++ stacks.h	1999/06/21 15:59:32
+@@ -91,7 +91,7 @@ extern SCM scm_stack_type;
+     - SCM_INUM (SCM_CDR (frame)) \
+     - 1)) \
+ 
+-#define SCM_FRAME_FLAGS(frame) SCM_FRAME_REF (frame, flags)
++#define SCM_FRAME_FLAGS(frame) SCM2LNG(SCM_FRAME_REF (frame, flags))
+ #define SCM_FRAME_SOURCE(frame) SCM_FRAME_REF (frame, source)
+ #define SCM_FRAME_PROC(frame) SCM_FRAME_REF (frame, proc)
+ #define SCM_FRAME_ARGS(frame) SCM_FRAME_REF (frame, args)
+Index: libguile/struct.h
+===================================================================
+RCS file: /egcs/carton/cvsfiles/guile/guile-core/libguile/struct.h,v
+retrieving revision 1.15
+diff -u -p -r1.15 struct.h
+--- struct.h	1999/03/14 16:52:56	1.15
++++ struct.h	1999/06/21 15:59:32
+@@ -72,8 +72,8 @@
+ 					 (no hidden words) */
+ 
+ #define SCM_STRUCTP(X)  		(SCM_TYP3(X) == scm_tc3_cons_gloc)
+-#define SCM_STRUCT_DATA(X) 		((SCM*)(SCM_CDR(X)))
+-#define SCM_STRUCT_VTABLE_DATA(X) 	((SCM *)(SCM_CAR(X) - 1))
++#define SCM_STRUCT_DATA(X) 		((SCM *)(SCM_CDR(X)))
++#define SCM_STRUCT_VTABLE_DATA(X) 	((SCM *)(SCM2LNG(SCM_CAR(X)) - 1))
+ #define SCM_STRUCT_LAYOUT(X) 		(SCM_STRUCT_VTABLE_DATA(X)[scm_vtable_index_layout])
+ #define SCM_STRUCT_VTABLE(X) 		(SCM_STRUCT_VTABLE_DATA(X)[scm_vtable_index_vtable])
+ #define SCM_STRUCT_PRINTER(X) 		(SCM_STRUCT_VTABLE_DATA(X)[scm_vtable_index_printer])
+Index: libguile/tags.h
+===================================================================
+RCS file: /egcs/carton/cvsfiles/guile/guile-core/libguile/tags.h,v
+retrieving revision 1.21
+diff -u -p -r1.21 tags.h
+--- tags.h	1999/06/09 12:19:54	1.21
++++ tags.h	1999/06/21 15:59:32
+@@ -50,9 +50,11 @@
+ 
+ 
+ 
++struct undefined_struct_for_scm;
++
+ /* In the beginning was the Word:
+  */
+-typedef long SCM;
++typedef struct undefined_struct_for_scm *SCM;
+ 
+ 
+ 
+@@ -66,10 +68,12 @@ typedef long SCM;
+ #ifdef _UNICOS
+ # define SCM2PTR(x) ((int)(x) >> 3)
+ # define PTR2SCM(x) (((SCM)(x)) << 3)
++# define SCM2LNG(x) ((long)(x))
+ # define SCM_POINTERS_MUNGED
+ #else
+-# define SCM2PTR(x) (x)
++# define SCM2PTR(x) ((void *)(x))
+ # define PTR2SCM(x) ((SCM)(x))
++# define SCM2LNG(x) ((long)(x))
+ #endif /* def _UNICOS */
+ 
+ 
+@@ -102,7 +106,7 @@ typedef long SCM;
+  * (Not always impossible but it is fair to say that many details of tags
+  * are mutually dependent).  */
+ 
+-#define SCM_IMP(x) 		(6 & (int)(x))
++#define SCM_IMP(x) 		(6 & (SCM2LNG(x)))
+ #define SCM_NIMP(x) 		(!SCM_IMP(x))
+ 
+ /* Here is a summary of tagging in SCM values as they might occur in
+@@ -260,7 +264,7 @@ typedef long SCM;
+  * stored in the SCM_CAR of a non-immediate object have a 1 in bit 1:
+  */
+ 
+-#define SCM_NCONSP(x) (1 & (int)SCM_CAR(x))
++#define SCM_NCONSP(x) (1 & (SCM2LNG(SCM_CAR(x))))
+ #define SCM_CONSP(x) (!SCM_NCONSP(x))
+ 
+ 
+@@ -269,10 +273,10 @@ typedef long SCM;
+  */
+ #define SCM_ECONSP(x) (SCM_CONSP (x) \
+ 		       || (SCM_TYP3(x) == 1 \
+-                           && SCM_CDR (SCM_CAR (x) - 1) != 0))
++                           && SCM_CDR (PTR2SCM(SCM_CARLNG (x) - 1)) != 0))
+ #define SCM_NECONSP(x) (SCM_NCONSP(x) \
+ 			&& (SCM_TYP3(x) != 1 \
+-			    || SCM_CDR (SCM_CAR (x) - 1) == 0))
++			    || SCM_CDR (PTR2SCM(SCM_CARLNG(x) - 1)) == 0))
+ 
+ 
+ 
+@@ -282,8 +286,8 @@ typedef long SCM;
+ /* See numbers.h for macros relating to immediate integers.
+  */
+ 
+-#define SCM_ITAG3(x) 		(7 & (int)x)
+-#define SCM_TYP3(x) 		(7 & (int)SCM_CAR(x))
++#define SCM_ITAG3(x) 		(7 & SCM2LNG(x))
++#define SCM_TYP3(x) 		(7 & SCM2LNG(SCM_CAR(x)))
+ #define scm_tc3_cons		0
+ #define scm_tc3_cons_gloc	1
+ #define scm_tc3_int_1		2
+@@ -420,8 +424,8 @@ enum scm_tags
+ };
+ 
+ #define SCM_ITAG8(X)		((int)(X) & 0xff)
+-#define SCM_MAKE_ITAG8(X, TAG)	(((X)<<8) + TAG)
+-#define SCM_ITAG8_DATA(X)	((X)>>8)
++#define SCM_MAKE_ITAG8(X, TAG)	(((SCM2LNG(X))<<8) + TAG)
++#define SCM_ITAG8_DATA(X)	((SCM2LNG(X))>>8)
+ 
+ 
+ 
+@@ -435,9 +439,9 @@ enum scm_tags
+ #define SCM_IFLAGP(n) 		((0x87 & (int)(n))==4)
+ #define SCM_ISYMNUM(n) 		((int)((n)>>9))
+ #define SCM_ISYMCHARS(n) 	(scm_isymnames[SCM_ISYMNUM(n)])
+-#define SCM_MAKSPCSYM(n) 	(((n)<<9)+((n)<<3)+4L)
+-#define SCM_MAKISYM(n) 		(((n)<<9)+0x74L)
+-#define SCM_MAKIFLAG(n) 	(((n)<<9)+0x174L)
++#define SCM_MAKSPCSYM(n) 	((SCM)(((n)<<9)+((n)<<3)+4L))
++#define SCM_MAKISYM(n) 		((SCM)(((n)<<9)+0x74L))
++#define SCM_MAKIFLAG(n) 	((SCM)(((n)<<9)+0x174L))
+ 
+ /* This table must agree with the declarations
+  * in repl.c: {Names of immediate symbols}.
+Index: libguile/variable.h
+===================================================================
+RCS file: /egcs/carton/cvsfiles/guile/guile-core/libguile/variable.h,v
+retrieving revision 1.7
+diff -u -p -r1.7 variable.h
+--- variable.h	1997/05/26 22:34:40	1.7
++++ variable.h	1999/06/21 15:59:32
+@@ -53,7 +53,7 @@
+ extern int scm_tc16_variable;
+ 
+ #define SCM_VARVCELL(V) 	SCM_CDR(V)
+-#define SCM_VARIABLEP(X)   	(scm_tc16_variable == SCM_CAR(X))
++#define SCM_VARIABLEP(X)   	(scm_tc16_variable == SCM_CARLNG(X))
+ #define SCM_UDVARIABLEP(X) 	(SCM_VARIABLEP(X) && SCM_UNBNDP (SCM_CDR (SCM_VARVCELL (X))))
+ #define SCM_DEFVARIABLEP(X) 	(SCM_VARIABLEP(X) && !SCM_UNBNDP (SCM_CDR (SCM_VARVCELL (X))))
+ 
+cvs server: Diffing qt
+cvs server: Diffing qt/md
+cvs server: Diffing qt/time
+cvs server: Diffing www

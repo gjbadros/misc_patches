@@ -1,0 +1,66 @@
+
+From dan@more.net Wed Jul 10 18:54:49 1996
+Date: Wed, 10 Jul 1996 08:06:27 -0500
+From: Dan Niles <dan@more.net>
+To: fvwm@hpc.uh.edu
+Subject: FVWM: CurrentScreen patch for fvwm 2.0.43
+
+
+Here is my CurrentScreen patch for fvwm 2.0.43.  This patch makes CurrentScreen
+(in the Next/Prev commands) work more intuitive.
+
+Before this patch, CurrentDesk selects windows on the current desk, and
+CurrentScreen selects window on the current page.  To select only windows
+on the current screen (view port), both CurrentDesk and CurrentScreen must
+be specified.
+
+After the patch:
+
+	CurrentDesk	selects windows on the current virtual desk
+	CurrentPage	selects windows on the current virtual page
+	CurrentScreen	selects windows on the current screen, or view port.
+
+I apply it after the FlipFocus patch, but the FlipFocus patch is not
+necessary.
+
+------------------------- fvwm-2.0.43-CurrentScreen.patch --------------------
+--- builtins.c.orig	Tue Jul  9 11:16:15 1996
++++ builtins.c	Tue Jul  9 11:29:07 1996
+@@ -1794,7 +1794,7 @@
+   Bool needsIconic = 0;
+   Bool needsNormal = 0;
+   Bool needsCurrentDesk = 0;
+-  Bool needsCurrentScreen = 0;
++  Bool needsCurrentPage = 0;
+   Bool needsVisible = 0;
+   Bool needsInvisible = 0;
+   char *AnyWindow = "*";
+@@ -1844,7 +1844,12 @@
+       else if(mystrcasecmp(condition,"!Visible")==0)
+         needsInvisible = 1;
+       else if(mystrcasecmp(condition,"CurrentScreen")==0)
+-        needsCurrentScreen = 1;
++	{
++	  needsCurrentDesk = 1;
++	  needsCurrentPage = 1;
++	}
++      else if(mystrcasecmp(condition,"CurrentPage")==0)
++        needsCurrentPage = 1;
+       else if(mystrcasecmp(condition,"CirculateHit")==0)
+         useCirculateHit = 1;
+       else if(mystrcasecmp(condition,"CirculateHitIcon")==0)
+@@ -1898,7 +1903,7 @@
+            ((!needsCurrentDesk)||(fw->Desk == Scr.CurrentDesk))&&
+            ((!needsVisible)||(fw->flags & VISIBLE))&&
+            ((!needsInvisible)||(!(fw->flags & VISIBLE)))&&
+-           ((!needsCurrentScreen)||((fw->frame_x < Scr.MyDisplayWidth)&&
++           ((!needsCurrentPage)||((fw->frame_x < Scr.MyDisplayWidth)&&
+                                     (fw->frame_y < Scr.MyDisplayHeight)&&
+                                     (fw->frame_x+fw->frame_width > 0)&&
+                                     (fw->frame_y+fw->frame_height > 0)))))
+--
+Visit the official FVWM web page at <URL:http://www.hpc.uh.edu/fvwm/>.
+To unsubscribe from the list, send "unsubscribe fvwm" in the body of a
+message to majordomo@hpc.uh.edu.
+To report problems, send mail to fvwm-owner@hpc.uh.edu.
+

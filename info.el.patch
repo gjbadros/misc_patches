@@ -1,0 +1,24 @@
+*** lisp/info.el	Thu Aug  8 19:08:30 1996
+--- info.el	Thu Aug 21 17:35:31 1997
+***************
+*** 884,892 ****
+  	 ;; Record as a completion and perhaps as default.
+  	 (if (eq default t) (setq default str))
+  	 (if (eq alt-default t) (setq alt-default str))
+! 	 (setq completions
+! 	       (cons (cons str nil)
+! 		     completions))))
+       ;; If no good default was found, try an alternate.
+       (or default
+  	 (setq default alt-default))
+--- 884,893 ----
+  	 ;; Record as a completion and perhaps as default.
+  	 (if (eq default t) (setq default str))
+  	 (if (eq alt-default t) (setq alt-default str))
+! 	 (if (not (assoc str completions))
+! 	     (setq completions
+! 		   (cons (cons str nil)
+! 			 completions)))))
+       ;; If no good default was found, try an alternate.
+       (or default
+  	 (setq default alt-default))

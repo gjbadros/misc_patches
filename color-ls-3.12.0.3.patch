@@ -1,0 +1,2484 @@
+diff -urN orig/fileutils-3.12/color-ls.log fileutils-3.12/color-ls.log
+--- orig/fileutils-3.12/color-ls.log	Wed Dec 31 16:00:00 1969
++++ fileutils-3.12/color-ls.log	Mon Jul 17 13:14:17 1995
+@@ -0,0 +1,71 @@
++Colour and 8-bit support by Dennis Flaherty <dennisf@denix.elk.miles.com>
++and Peter Anvin <Peter.Anvin@linux.org> based on original patches by Greg Lee
++<lee@uhunix.uhcc.hawaii.edu>.
++
++This file logs the changes that we have made against the original GNU
++sources.
++
++REVISION HISTORY:
++
++Mar 1992: Greg Lee <lee@uhunix.uhcc.hawaii.edu>
++    Original color-ls patch.  Displayed the ansi color escape
++    sequences unless '-f' option was used, or if long format was
++    specified.  Posted to comp.os.linux.
++Apr 1992: Dennis Flaherty <dennisf@denix.elk.miles.com>
++    Expanded color-ls patch to display color anytime a filename was
++    displayed, including long format and targets of links in long
++    format.  Changed color scheme, added colors for block and
++    character devices.  Posted to c.o.l. and sent to H.J. Lu.
++Dec 1992: Peter Anvin <Peter.Anvin@linux.org>
++    Implemented flexible macros that could be #defined to set color
++    scheme, used Flaherty's color scheme as default.  Macro for
++    setting default behavior of color display, '-f' toggles.  Added
++    option for 8-bit ISO filenames.  Added long-name options.
++May 1993: Dennis Flaherty <dennisf@denix.elk.miles.com>
++    Incorporated Anvin's and Flaherty's changes into new
++    fileutils-3.5.  Fixed "target of link in long format" coloring
++    again.  Due to conflict with new '-f' or '--full-time' option,
++    color-ls option changed to '-o'.  Always defaults to no color,
++    always supports 8-bit ISO filenames.  Added LS_COLOR environment
++    variable to customize colour settings.
++May 1993: Peter Anvin <Peter.Anvin@linux.org>
++    Restored command line option '-7' or '-8' to select 7-bit or
++    8-bit mode.  Added compile-time option to make 7 bits the
++    default.  Made the format of LS_COLOR more general.  Added
++    '-e' short option for '--full-time' since GNU decided to go
++    with UNIX compatibility for the '-f' option.  Updated man pages. 
++Jun 1993: Peter Anvin <Peter.Anvin@linux.org>	3.8.0.1
++    Patch against new fileutils-3.8.  Posted to comp.os.linux.announce.
++Oct 1993: Peter Anvin <Peter.Anvin@linux.org>	3.8.3.1
++    Patch against fileutils-3.8.3.  Merged `ls', `dir' and `vdir' into
++    one binary while I was at it.  Disabled use of tabs with color codes.
++    Posted it to comp.os.linux.announce just in time for fileutils-3.8.3 to
++    be withdrawn.
++Oct 1993: Peter Anvin <Peter.Anvin@linux.org>	3.8.4f.1
++    Patch against fileutils-3.8.4f.  Worked without a change for
++    fileutils-3.9.
++Oct 1993: Peter Anvin <Peter.Anvin@linux.org>	3.9.0.1
++    Added --color-if-tty option, for people whose pagers convert
++    escapes to ^[.
++Nov 1993: Peter Anvin <Peter.Anvin@linux.org>	3.9.0.2
++    Fixed some annoying mistakes on the ls help screen.  Changed the
++    format of LS_COLORS to provide a pretty much system-independent
++    format (although it might still require some hacking).  Replaced
++    the --color-if-tty option with an optional argument to --color.
++    Fixed -T 0 (disable tabs).
++Nov 1994: Peter Anvin <Peter.Anvin@linux.org>	3.12.0.1
++    Changed -o (but not --color) into a toggle switch.  Added
++    colorization by file name and cleaned up the code a bit.  Made the
++    -f (fast) option inhibit colorization.  Added new color options
++    for missing files and orphanned symlinks.  Added dircolors program,
++    compatible with the Slackware version but hopefully with less
++    overhead than reading the config file every time.  Patch against
++    new fileutils-3.12.
++Dec 1994: Peter Anvin <Peter.Anvin@linux.org>	3.12.0.2
++    Fixed a problem with the dircolors program and zsh (ksh mode
++    didn't work for zsh as I thought it would have).  Added OPTIONS
++    keyword to dircolors file.
++Jul 1995: Peter Anvin <Peter.Anvin@linux.org>	3.12.0.3
++    Bug fix release.
++
++
+diff -urN orig/fileutils-3.12/doc/README.color fileutils-3.12/doc/README.color
+--- orig/fileutils-3.12/doc/README.color	Wed Dec 31 16:00:00 1969
++++ fileutils-3.12/doc/README.color	Mon Jul 17 12:58:56 1995
+@@ -0,0 +1,5 @@
++
++NOTE: This texinfo documentiation is the one from the original fileutils.
++I have not modified this to document the ls color options and the dircolors
++program; see the ls(1) and dircolors(1) man pages for this information.
++
+diff -urN orig/fileutils-3.12/man/Makefile.in fileutils-3.12/man/Makefile.in
+--- orig/fileutils-3.12/man/Makefile.in	Fri Nov  4 06:52:29 1994
++++ fileutils-3.12/man/Makefile.in	Mon Jul 17 12:58:56 1995
+@@ -23,16 +23,17 @@
+ prefix = @prefix@
+ mandir = $(prefix)/man/man1
+ manext = 1
++etcdir = $(prefix)/etc
+ INSTALL = @INSTALL@
+ INSTALL_DATA = @INSTALL_DATA@
+ RM = @RM@
+ 
+ MANFILES = chgrp.1 chown.1 chmod.1 cp.1 dd.1 df.1 du.1 install.1 \
+-ln.1 ls.1 mkdir.1 mkfifo.1 mknod.1 mv.1 rm.1 rmdir.1 touch.1
++ln.1 ls.1 mkdir.1 mkfifo.1 mknod.1 mv.1 rm.1 rmdir.1 touch.1 dircolors.1
+ 
+ DISTFILES = Makefile.in $(MANFILES)
+ 
+-all:
++all: dircolors.1
+ 
+ .SUFFIXES:
+ 
+@@ -66,7 +67,7 @@
+ mostlyclean: clean
+ 
+ distclean: clean
+-	$(RM) -f Makefile
++	$(RM) -f Makefile dircolors.1
+ 
+ realclean: distclean
+ 	$(RM) -f TAGS
+@@ -77,6 +78,13 @@
+ 	  ln $$file $(distdir) \
+ 	    || { echo copying $$file instead; cp -p $$file $(distdir);}; \
+ 	done
++
++#
++# dircolors.1 contain path references, so...
++#
++dircolors.1:  dircolors.1.in
++	sed -e "s:XXX_PREFIX_XXX:$(prefix):g" < dircolors.1.in | \
++	  sed -e 's:///*:/:g' > dircolors.1
+ 
+ # Tell versions [3.59,3.63) of GNU make not to export all variables.
+ # Otherwise a system limit (for SysV at least) may be exceeded.
+diff -urN orig/fileutils-3.12/man/dircolors.1.in fileutils-3.12/man/dircolors.1.in
+--- orig/fileutils-3.12/man/dircolors.1.in	Wed Dec 31 16:00:00 1969
++++ fileutils-3.12/man/dircolors.1.in	Mon Jul 17 13:26:07 1995
+@@ -0,0 +1,404 @@
++.TH DIRCOLORS 1L \" -*- nroff -*-
++.SH NAME
++dircolors \- Set color parameters for 
++.BR ls (1)
++.SH SYNOPSIS
++.TP
++\fBeval `dircolors\fR [\-abckstzPS] [filename]\fB`\fR
++.TP
++.B dircolors \-v
++.SH DESCRIPTION
++.B dircolors
++is a program to generate a setup for the color version of GNU 
++.BR ls .
++The setup consists of an
++.B LS_COLORS
++environment variable and a set of aliases.  For
++.B sh
++and
++.BR ash ,
++which lack aliases, shell functions are substituted.  The
++.B dircolors
++command will generally be run from the user's
++.IR .profile ,
++.I .cshrc
++or equivalent file, or the system-wide equivalents.
++.SS OPTIONS
++.TP
++.I "\-a, \-s"
++Assume the user is using a Bourne-style shell which does not support
++aliasing.  This is default if the base name of the environment
++variable
++.B SHELL
++is
++.B sh
++or
++.BR ash .
++Instead a shell function is used.  If the
++.I \-P
++option is also used, this function will need to spawn a subshell; this
++is slow and should be avoided if possible.
++.TP
++.I "\-b, \-k"
++Assume the user is using a Bourne-style shell that supports Korn-style
++aliasing.  This is the default if the base name of the environment
++variable
++.B SHELL
++is
++.B bash
++or
++.BR ksh .
++You may want to specify this option explicitly if your
++.B sh
++is really a more advanced shell, which does support Korn-style aliasing.
++.TP
++.I "\-z"
++Assume the user is using a Bourne-style shell that supports Korn-style
++aliasing, but differs between string and list environment variables.
++This is the default is the base name of the environment variable
++.B SHELL
++is
++.BR zsh .
++.TP
++.I "\-c, \-t"
++Assume the user is using a C-style shell.  This is the default if the
++base name of the environment variable
++.B SHELL
++is
++.B csh
++or
++.BR tcsh .
++.TP
++.I "\-P"
++Do not seek the path to find the location of the
++.B ls
++binary.  By default,
++.B dircolors
++will find the location of the
++.B ls
++binary at the time it is run, and include it in the shell function or
++alias, which for most shells results in a significant speed
++improvement.
++.TP
++.I "\-S"
++Set colorization to
++.I no
++if the terminal does not occur in any
++.B TERM
++statement, even if there is a
++.B COLOR
++statement in the global section of the file.  This is for
++compatibility with Slackware GNU
++.B ls
++for which the order of the statements did not matter.
++.TP
++.I "\-v"
++Display a version string and exit.
++.SS CONFIGURATION FILE
++If a filename is specified on the command line, it will be used to
++generate the setup, if not, the file
++.B .dir_colors
++in the users home directory will be used.  If that file does not exist
++either, the system-wide file of
++.B XXX_PREFIX_XXX/etc/DIR_COLORS
++will be used.
++.PP
++The configuration file consists of several statements, one per line.
++Anything right of a hash mark (\#) is treated as a comment, if the
++hash mark is at the beginning of a line or is preceded by at least one
++whitespace.  Blank lines are ignored.
++.PP
++The
++.I global
++section of the file consists of any statement before the first
++.B TERM
++statement.  Any statement in the global section of the file is
++considered valid for all terminal types  Following the global section
++is one or more 
++.I terminal-specific
++sections, which are preceded by one or more
++.B TERM
++statements which specify the terminal types (as given by the
++.B TERM
++environment variable) the following declarations apply for.  It is
++always possible to override a global declaration by a subsequent
++terminal-specific one.
++.PP
++The following statements are recognized, case is insignificant:
++.PP
++.TP
++.B TERM \fIterminal-type\fR
++Starts a terminal-specific section and specifies which terminal it
++applies to.  Multiple
++.B TERM
++statements can be used to create a section which applies for several
++terminal types.
++.TP
++.B COLOR yes|all|no|none|tty
++Specifies that colorization should be always enabled (\fIyes\fR or
++\fIall\fR), never enabled (\fIno\fR or \fInone\fR) or enabled only if
++the output is a terminal (\fItty\fR).  The default is \fIno\fR.
++.TP
++.B EIGHTBIT yes|no
++Specifies that eight-bit ISO 8859 characters should be enabled by
++default.  Can for compatibility reasons also be specified as 1 for
++\fIyes\fR or 0 for \fIno\fR.  The default is \fIno\fR.
++.TP
++.B OPTIONS \fIoptions\fR
++Adds command line options to the default
++.B ls
++command line.  The options can be any valid
++.B ls
++command line options, and should include the leading minus sign.
++Please note that
++.B dircolors
++does not verify the validity of these options.
++.TP
++.B NORMAL \fIcolor-sequence\fR
++Specifies the color used for normal (non-filename) text.
++.TP
++.B FILE \fIcolor-sequence\fR
++Specifies the color used for a regular file.
++.TP
++.B DIR \fIcolor-sequence\fR
++Specifies the color used for directories.
++.TP
++.B LINK \fIcolor-sequence\fR
++Specifies the color used for a symbolic link.
++.TP
++.B ORPHAN \fIcolor-sequence\fR
++Specifies the color used for an orphanned symbolic link (one which
++points to a nonexistent file).  If this is unspecified,
++.B ls
++will use the
++.B LINK
++color instead.
++.TP
++.B MISSING \fIcolor-sequence\fR
++Specifies the color used for a missing file (a nonexistent file which
++nevertheless has a symbolic link pointing to it).  If this is unspecified,
++.B ls
++will use the
++.B FILE
++color instead.
++.TP
++.B FIFO \fIcolor-sequence\fR
++Specifies the color used for a FIFO (named pipe).
++.TP
++.B SOCK \fIcolor-sequence\fR
++Specifies the color used for a socket.
++.TP
++.B BLK \fIcolor-sequence\fR
++Specifies the color used for a block device special file.
++.TP
++.B CHR \fIcolor-sequence\fR
++Specifies the color used for a character device special file.
++.TP
++.B EXEC \fIcolor-sequence\fR
++Specifies the color used for a file with the executable attribute set.
++.TP
++.B LEFTCODE \fIcolor-sequence\fR
++Specifies the
++.I "left code"
++for non-ISO\ 6429 terminals (see below).
++.TP
++.B RIGHTCODE \fIcolor-sequence\fR
++Specifies the
++.I "right code"
++for non-ISO\ 6429 terminals (see below).
++.TP
++.B ENDCODE \fIcolor-sequence\fR
++Specifies the
++.I "end code"
++for non-ISO\ 6429 terminals (see below).
++.TP
++\fB*\fIextension\fR \fIcolor-sequence\fR
++Specifies the color used for any file that ends in \fIextension\fR.
++.TP
++\fB .\fIextension\fR \fIcolor-sequence\fR
++Same as \fB*\fR.\fIextension\fR.  Specifies the color used for any file that
++ends in .\fIextension\fR.  Note that the period is included in the
++extension, which makes it impossible to specify an extension not
++starting with a period, such as
++.B ~
++for
++.B emacs
++backup files.  This form should be considered obsolete.
++.SH ISO 6429 (ANSI) COLOR SEQUENCES
++Most color-capable ASCII terminals today use ISO 6429 (ANSI) color sequences,
++and many common terminals without color capability, including
++.B xterm
++and the widely used and cloned DEC VT100, will recognize ISO 6429 color
++codes and harmlessly eliminate them from the output or emulate them.
++.B ls
++uses ISO 6429 codes by default, assuming colorization is enabled.
++
++ISO 6429 color sequences are composed of sequences of numbers
++separated by semicolons.  The most common codes are:
++.sp
++.RS +.2i
++.ta 1.0i
++.nf
++ 0	to restore default color
++ 1	for brighter colors 
++ 4	for underlined text
++ 5	for flashing text
++30	for black foreground
++31	for red foreground
++32	for green foreground
++33	for yellow (or brown) foreground
++34	for blue foreground
++35	for purple foreground
++36	for cyan foreground
++37	for white (or gray) foreground
++40	for black background
++41	for red background
++42	for green background
++43	for yellow (or brown) background
++44	for blue background
++45	for purple background
++46	for cyan background
++47	for white (or gray) background
++.fi
++.RE
++.sp
++Not all commands will work on all systems or display devices.
++.PP
++.B ls
++uses the following defaults:
++.sp
++.RS +.2i
++.ta 1.0i 2.5i
++.nf
++\fBNORMAL\fR	0	Normal (non-filename) text
++\fBFILE\fR	0	Regular file
++\fBDIR\fR	32	Directory
++\fBLINK\fR	36	Symbolic link
++\fBORPHAN\fR	undefined	Orphanned symbolic link
++\fBMISSING\fR	undefined	Missing file
++\fBFIFO\fR	31	Named pipe (FIFO)
++\fBSOCK\fR	33	Socket
++\fBBLK\fR	44;37	Block device
++\fBCHR\fR	44;37	Character device
++\fBEXEC\fR	35	Executable file
++.fi
++.RE
++.sp
++A few terminal programs do not recognize the default 
++properly.  If all text gets colorized after you do a directory
++listing, change the
++.B NORMAL
++and
++.B FILE
++codes to the numerical codes for your normal foreground and background
++colors.
++.SH OTHER TERMINAL TYPES (ADVANCED CONFIGURATION)
++If you have a color-capable (or otherwise highlighting) terminal (or
++printer!) which uses a different set of codes, you can still generate
++a suitable setup.  To do so you will have to use the
++.BR LEFTCODE ,
++.BR RIGHTCODE ,
++and
++.BR ENDCODE
++definitions.
++.PP
++When writing out a filename,
++.B ls
++generates the following output sequence:
++.B LEFTCODE
++.I typecode
++.B RIGHTCODE
++.I filename
++.BR ENDCODE ,
++where the
++.I typecode
++is the color sequence that depends on the type or name of file.  If the
++.B ENDCODE
++is undefined, the sequence
++.B "LEFTCODE NORMAL RIGHTCODE"
++will be used instead.  The purpose of the left- and rightcodes is
++merely to reduce the amount of typing necessary (and to hide ugly
++escape codes away from the user).  If they are not appropriate for
++your terminal, you can eliminate them by specifying the respective
++keyword on a line by itself.
++.PP
++.B NOTE:
++If the
++.B ENDCODE
++is defined in the global section of the setup file, it
++.I cannot
++be undefined in a terminal-specific section of the file.  This means
++any
++.B NORMAL
++definition will have no effect.  A different
++.B ENDCODE
++can however be specified, which would have the same effect.
++.SH ESCAPE SEQUENCES
++To specify control- or blank characters in the color sequences or
++filename extensions, either C-style \e-escaped notation, or
++.BR stty -style
++^-notation can be used.  The C-style notation
++includes the following characters:
++.sp
++.RS +.2i
++.ta 1.0i
++.nf
++\fB\ea\fR	Bell (ASCII 7)
++\fB\eb\fR	Backspace (ASCII 8)
++\fB\ee\fR	Escape (ASCII 27)
++\fB\ef\fR	Form feed (ASCII 12)
++\fB\en\fR	Newline (ASCII 10)
++\fB\er\fR	Carriage Return (ASCII 13)
++\fB\et\fR	Tab (ASCII 9)
++\fB\ev\fR	Vertical Tab (ASCII 11)
++\fB\e?\fR	Delete (ASCII 127)
++\fB\e\fInnn\fR	Any character (octal notation)
++\fB\ex\fInnn\fR	Any character (hexadecimal notation)
++\fB\e_\fR	Space
++\fB\e\e\fR	Backslash (\e)
++\fB\e^\fR	Caret (^)
++\fB\e#\fR	Hash mark (#)
++.fi
++.RE
++.sp
++Please note that escapes are necessary to enter a space, backslash,
++caret or any control character anywhere in the string, as well as a
++hash mark as the first character.
++.SH NOTES
++The default
++.B LEFTCODE
++and
++.B RIGHTCODE
++definitions, which are used by ISO 6429 terminals are:
++.sp
++.RS +.2i
++.ta 1.0i
++.nf
++\fBLEFTCODE\fR	\ee[
++\fBRIGHTCODE\fR	m
++.fi
++.RE
++.sp
++The default
++.B ENDCODE
++is undefined.
++.SH AUTHOR
++H. Peter Anvin <Peter.Anvin@linux.org> with input from Patrick
++Volkerding, creator of the Slackware Linux distribution.
++.SH BUGS
++Currently is somewhat poorly integrated into the GNU fileutils
++package.  For example, it does not support long options and is
++probably pickier about POSIX violations (i.e. less portable) 
++than the rest of the programs.
++.PP
++The support for non-ISO 6429 terminals is a kluge at the very best.
++.SH FILES
++.ta \w'XXX_PREFIX_XXX/etc/DIR_COLORS'u+3n
++.nf
++\fBXXX_PREFIX_XXX/etc/DIR_COLORS\fR	System-wide setup file
++\fB~/.dir_colors\fR	User setup file
++.fi
++.SH SEE ALSO
++.BR ls (1),
++.BR stty (1),
++.BR xterm (1)
+diff -urN orig/fileutils-3.12/man/ls.1 fileutils-3.12/man/ls.1
+--- orig/fileutils-3.12/man/ls.1	Tue Apr 26 13:08:55 1994
++++ fileutils-3.12/man/ls.1	Mon Jul 17 12:58:58 1995
+@@ -3,7 +3,7 @@
+ ls, dir, vdir \- list contents of directories
+ .SH SYNOPSIS
+ .B ls
+-[\-abcdfgiklmnpqrstuxABCFGLNQRSUX1] [\-w cols] [\-T cols] [\-I pattern]
++[\-abcdefgiklmnopqrstuxABCFGLNQRSUX178] [\-w cols] [\-T cols] [\-I pattern]
+ [\-\-all] [\-\-escape] [\-\-directory] [\-\-inode] [\-\-kilobytes]
+ [\-\-numeric-uid-gid] [--no-group] [\-\-hide-control-chars] [\-\-reverse]
+ [\-\-size] [\-\-width=cols] [\-\-tabsize=cols] [\-\-almost-all]
+@@ -11,11 +11,14 @@
+ [\-\-ignore=pattern] [\-\-dereference] [\-\-literal] [\-\-quote-name]
+ [\-\-recursive] [\-\-sort={none,time,size,extension}]
+ [\-\-format={long,verbose,commas,across,vertical,single-column}]
+-[\-\-time={atime,access,use,ctime,status}] [\-\-help] [\-\-version] [name...]
++[\-\-time={atime,access,use,ctime,status}]
++[\-\-color[={yes,no,tty}]] [\-\-colour[={yes,no,tty}]]
++[\-\-7bit] [\-\-8bit] [\-\-help] [\-\-version] [name...]
+ .SH DESCRIPTION
+ This manual page
+ documents the GNU version of
+-.BR ls .
++.BR ls ,
++with color extensions.
+ .B dir
+ and
+ .B vdir
+@@ -49,6 +52,10 @@
+ .I "\-d, \-\-directory"
+ List directories like other files, rather than listing their contents.
+ .TP
++.I "\-e, \-\-full-time"
++List times in full, rather than using the standard abbreviation
++heuristics.
++.TP
+ .I "\-f"
+ Do not sort directory contents; list them in whatever order they are
+ stored on the disk.
+@@ -58,14 +65,11 @@
+ .I \-U
+ and disabling
+ .I \-l,
++.I \-o,
+ .I \-s,
+ and
+ .I \-t.
+ .TP
+-.I "\-\-full-time"
+-List times in full, rather than using the standard abbreviation
+-heuristics.
+-.TP
+ .I \-g
+ Ignored; for Unix compatibility.
+ .TP
+@@ -74,7 +78,8 @@
+ .TP
+ .I "\-k, \-\-kilobytes"
+ If file sizes are being listed, print them in kilobytes.  This
+-overrides the environment variable POSIXLY_CORRECT.
++overrides the environment variable 
++.BR POSIXLY_CORRECT .
+ .TP
+ .I "\-l, \-\-format=long, \-\-format=verbose"
+ In addition to the name of each file, print the file type,
+@@ -91,6 +96,14 @@
+ .I "\-n, \-\-numeric-uid-gid"
+ List the numeric UID and GID instead of the names.
+ .TP
++.I "\-o, \-\-color, \-\-colour, \-\-color=yes, \-\-colour=yes"
++Colorize the names of files depending on the type of file.
++See `DISPLAY COLORIZATION' below.  Note that
++.I \-o
++unlike
++.I \-\-color
++is a toggle.
++.TP
+ .I \-p
+ Append a character to each file name indicating the file type.
+ .TP
+@@ -102,7 +115,9 @@
+ .TP
+ .I "\-s, \-\-size"
+ Print the size of each file in 1K blocks to the left of the file name.
+-If the environment variable POSIXLY_CORRECT is set, 512-byte blocks
++If the environment variable 
++.B POSIXLY_CORRECT
++is set, 512-byte blocks
+ are used instead.
+ .TP
+ .I "\-t, \-\-sort=time"
+@@ -179,6 +194,15 @@
+ .I "\-1, \-\-format=single-column"
+ List one file per line.
+ .TP
++.I "\-7, \-\-7bit"
++Treat all character outside the ASCII (ISO 646) set (0x20-0x7E) as
++nonprintable control characters.
++.TP
++.I "\-8, \-\-8bit"
++Treat all characters from the 8-bit ISO 8859 character sets
++(0x20-0x7E, 0xA1-0xFF) as printable.  This includes ASCII as a subset.
++This is the default unless overridden at compile time.
++.TP
+ .I "\-w, \-\-width cols"
+ Assume the screen is
+ .I cols
+@@ -190,7 +214,10 @@
+ .I "\-T, \-\-tabsize cols"
+ Assume that each tabstop is
+ .I cols
+-columns wide.  The default is 8.
++columns wide.  The default is 8, or whatever the
++.B TABSIZE
++environment variable says.  Setting the tabsize to 0 disables
++the use of tab characters completely.
+ .TP
+ .I "\-I, \-\-ignore pattern"
+ Do not list files whose names match the shell pattern
+@@ -199,11 +226,134 @@
+ initial `.' in a filename does not match a wildcard at the start of
+ .I pattern.
+ .TP
++.I "\-\-color=tty, \-\-colour=tty"
++Same as
++.I \-o
++but only if standard output is a terminal.  This is very useful for
++shell scripts and command aliases, especially if your favorite pager
++does not support color control codes.
++.TP
++.I "\-\-color=no, \-\-colour=no"
++Disables colorization.  This is the default.  Provided to override a
++previous color option.
++.TP
+ .I "\-\-help"
+ Print a usage message on standard output and exit successfully.
+ .TP
+ .I "\-\-version"
+ Print version information on standard output then exit successfully.
++.SS DISPLAY COLORIZATION
++When using the
++.I "\-o"
++or
++.I "\-\-color"
++options, this version of
++.B ls
++will colorize the file names printed according to the name and type of
++file.  By default, this colorization is by type only, and the codes
++used are ISO 6429 (ANSI) compliant.
++.PP
++You can override the default colors by defining the environment
++variable 
++.B LS_COLORS
++(or 
++.BR LS_COLOURS ).
++The format of this variable is reminicent of the termcap(5) file
++format; a colon-separated list of expressions of the form "xx=string",
++where "xx" is a two-character variable name.  The variables with their
++associated defaults are:
++.sp
++.RS +.2i
++.ta 1.0i 2.5i
++.nf
++\fBno\fR	0	Normal (non-filename) text
++\fBfi\fR	0	Regular file
++\fBdi\fR	32	Directory
++\fBln\fR	36	Symbolic link
++\fBpi\fR	31	Named pipe (FIFO)
++\fBso\fR	33	Socket
++\fBbd\fR	44;37	Block device
++\fBcd\fR	44;37	Character device
++\fBex\fR	35	Executable file
++\fBmi\fR	(none)	Missing file (defaults to fi)
++\fBor\fR	(none)	Orphanned symbolic link (defaults to ln)
++\fBlc\fR	\ee[	Left code
++\fBrc\fR	m	Right code
++\fBec\fR	(none)	End code (replaces lc+no+rc)
++.fi
++.RE
++.sp
++You only need to include the variables you want to change from the
++default.
++.PP
++File names can also be colorized based on filename extension.  This is
++specified in the LS_COLORS variable using the syntax "*ext=string".
++For example, using ISO 6429 codes, to color all C-language source
++files blue you would specify "*.c=34".  This would color all files
++ending in .c in blue (34) color.
++.PP
++Control characters can be written either in C-style \e-escaped
++notation, or in
++.BR stty -like
++^-notation.  The C-style notation adds \ee for Escape, \e_ for a
++normal space characer, and \e? for Delete.  In addition, the \e escape
++character can be used to override the default interpretation of \e, ^,
++: and =.
++.PP
++Each file will be written as <lc> <color\ code> <rc> <filename> <ec>.
++If the <ec> code is undefined, the sequence <lc> <no> <rc> will be
++used instead.  This is generally more convenient to use, but less
++general.  The left, right and end codes are provided so you don't have
++to type common parts over and over again and to support weird
++terminals; you will generally not need to change them at all unless
++your terminal does not use ISO 6429 color sequences but a different
++system.
++.PP
++If your terminal does use ISO 6429 color codes, you can compose the type
++codes (i.e. all except the 
++.BR lc ,
++.BR rc ,
++and
++.B ec
++codes) from numerical commands separated by semicolons.  The most
++common commands are:
++.sp
++.RS +.2i
++.ta 1.0i
++.nf
++ 0	to restore default color
++ 1	for brighter colors 
++ 4	for underlined text
++ 5	for flashing text
++30	for black foreground
++31	for red foreground
++32	for green foreground
++33	for yellow (or brown) foreground
++34	for blue foreground
++35	for purple foreground
++36	for cyan foreground
++37	for white (or gray) foreground
++40	for black background
++41	for red background
++42	for green background
++43	for yellow (or brown) background
++44	for blue background
++45	for purple background
++46	for cyan background
++47	for white (or gray) background
++.fi
++.RE
++.sp
++Not all commands will work on all systems or display devices.
++.PP
++A few terminal programs do not recognize the default end code
++properly.  If all text gets colorized after you do a directory
++listing, try changing the
++.B no
++and
++.B fi
++codes from 0 to the numerical codes for your standard fore- and
++background colors.
+ .SH BUGS
+ On BSD systems, the
+ .I \-s
+@@ -214,3 +364,14 @@
+ HP-UX
+ .B ls
+ program.
++.PP
++Character set selection should be more system independent.
++.PP
++Using the colorization options disables the use of the tab character for
++column spacing unless the
++.I \-T
++option is used; apparently some systems do not like tabs and color
++codes in conjunction.
++.PP
++If there was a single standard for the English language it would not
++be necessary to support redundant spellings.
+diff -urN orig/fileutils-3.12/src/Makefile.in fileutils-3.12/src/Makefile.in
+--- orig/fileutils-3.12/src/Makefile.in	Fri Nov  4 06:58:14 1994
++++ fileutils-3.12/src/Makefile.in	Mon Jul 17 12:58:58 1995
+@@ -24,11 +24,12 @@
+ exec_prefix = @exec_prefix@
+ bindir = $(exec_prefix)/bin
+ libdir = $(exec_prefix)/lib
++etcdir = $(exec_prefix)/etc
+ 
+ INSTALL = @INSTALL@
+ INSTALL_PROGRAM = @INSTALL_PROGRAM@
+ CC = @CC@
+-DEFS = @DEFS@
++DEFS = -DETC_DIR=\"$(etcdir)\" @DEFS@
+ LIBS = @LIBS@
+ CFLAGS = @CFLAGS@
+ LDFLAGS = @LDFLAGS@
+@@ -38,11 +39,13 @@
+ 
+ SOURCES = chmod.c chgrp.c chown.c cp-aux.c cp-hash.c cp.c \
+ dd.c df.c du.c install.c ln.c ls.c mkdir.c mkfifo.c mknod.c mv.c mvdir.c \
+-rm.c rmdir.c sync.c touch.c version.c ls-ls.c ls-dir.c ls-vdir.c
++rm.c rmdir.c sync.c touch.c version.c ls-ls.c ls-dir.c ls-vdir.c \
++dircolors.c
+ 
+ OBJECTS = chmod.o chgrp.o chown.o cp-aux.o cp-hash.o cp.o \
+ dd.o df.o du.o install.o ln.o ls.o mkdir.o mkfifo.o mknod.o mv.o mvdir.o \
+-rm.o rmdir.o sync.o touch.o version.o ls-ls.o ls-dir.o ls-vdir.o
++rm.o rmdir.o sync.o touch.o version.o ls-ls.o ls-dir.o ls-vdir.o \
++dircolors.o
+ 
+ DISTFILES = Makefile.in cp.h ls.h version.h $(SOURCES) \
+ system.h
+@@ -51,8 +54,8 @@
+ # confusion with the `install' target.  The install rule transforms `ginstall'
+ # to install before applying any user-specified name transformations.
+ 
+-PROGS = chgrp chown chmod cp dd du ginstall ln dir vdir ls mkdir \
+-mkfifo mknod mv rm rmdir sync touch @PROGS@
++PROGS = chgrp chown chmod cp dd du ginstall ln ls mkdir \
++mkfifo mknod mv rm rmdir sync touch dircolors @PROGS@
+ 
+ LIBPROGS = @LIBPROGS@
+ 
+@@ -139,8 +142,14 @@
+ df: df.o
+ 	$(link_command) df.o ../lib/libfu.a version.o $(LIBS)
+ 
+-dir: ls.o ls-dir.o
+-	$(link_command) ls.o ls-dir.o ../lib/libfu.a version.o $(LIBS)
++#dir: ls.o ls-dir.o
++#	$(link_command) ls.o ls-dir.o ../lib/libfu.a version.o $(LIBS)
++
++dir: ls ln
++	./ln ls dir
++
++dircolors: dircolors.o
++	$(link_command) dircolors.o ../lib/libfu.a version.o $(LIBS)
+ 
+ du: du.o
+ 	$(link_command) du.o ../lib/libfu.a version.o $(LIBS)
+@@ -181,9 +190,11 @@
+ touch: touch.o
+ 	$(link_command) touch.o ../lib/libfu.a version.o $(LIBS)
+ 
+-vdir: ls.o ls-vdir.o
+-	$(link_command) ls.o ls-vdir.o ../lib/libfu.a version.o $(LIBS)
++#vdir: ls.o ls-vdir.o
++#	$(link_command) ls.o ls-vdir.o ../lib/libfu.a version.o $(LIBS)
+ 
++vdir: ls ln
++	./ln vdir ls
+ 
+ $(PROGS) $(LIBPROGS): ../lib/libfu.a version.o
+ $(OBJECTS): ../lib/pathmax.h
+diff -urN orig/fileutils-3.12/src/dircolors.c fileutils-3.12/src/dircolors.c
+--- orig/fileutils-3.12/src/dircolors.c	Wed Dec 31 16:00:00 1969
++++ fileutils-3.12/src/dircolors.c	Mon Jul 17 13:17:54 1995
+@@ -0,0 +1,559 @@
++/*
++   dircolors.c
++
++   Parse a Slackware-style DIR_COLORS file
++
++   Copyright (C) 1994, 1995 H. Peter Anvin
++
++   This program is free software; you can redistribute it and/or modify
++   it under the terms of the GNU General Public License as published by
++   the Free Software Foundation; either version 2, or (at your option)
++   any later version.
++
++   This program is distributed in the hope that it will be useful,
++   but WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++   GNU General Public License for more details.
++
++   You should have received a copy of the GNU General Public License
++   along with this program; if not, write to the Free Software
++   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.  */
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <unistd.h>
++#include <ctype.h>
++#include <string.h>
++#include "version.h"
++
++#define USER_FILE ".dir_colors"	/* Versus user's home directory */
++#define SYSTEM_FILE "//DIR_COLORS" /* System-wide file in directory SYSTEM_DIR
++				    (defined on the cc command line) */
++
++#define STRINGLEN 2048		/* Max length of a string */
++
++enum modes { mo_sh, mo_csh, mo_ksh, mo_zsh, mo_unknown, mo_err };
++
++const char *shells[] = { "sh", "ash", "csh", "tcsh", "bash", "ksh",
++			 "zsh", NULL };
++
++const int shell_mode[] = { mo_sh, mo_sh, mo_csh, mo_csh,
++			   mo_ksh, mo_ksh, mo_zsh };
++
++static int
++figure_mode (me)
++     char *me;
++{
++  char *shell, *shellv;
++  int i;
++
++  shellv = getenv("SHELL");
++  if ( !shellv || !(*shellv) )
++    {
++      fprintf(stderr, "%s: No SHELL variable, and no mode option specified\n",
++	      me);
++      return mo_err;
++    }
++
++  if ( (shell = strrchr(shellv,'/')) != NULL )
++    shell++;
++  else
++    shell = shellv;
++
++  for ( i = 0 ; shells[i] ; i++ )
++    {
++      if ( strcmp(shell,shells[i]) == 0 )
++	return shell_mode[i];
++    }
++
++  fprintf(stderr, "%s: Unknown shell `%s'\n", me, shell);
++  return mo_err;
++}
++
++static void
++parse_line(char **keyword, char **arg, char *line)
++{
++  char *p;
++
++  *keyword = *arg = "";
++
++  for ( p = line ; isspace(*p) ; p++ );
++
++  if ( ! (*p) || *p == '#' )
++    return;
++
++  *keyword = p;
++
++  for ( ; !isspace(*p) ; p++ )
++    {
++      if ( !(*p) )
++	return;
++    }
++
++  *(p++) = '\0';
++
++  for ( ; isspace(*p) ; p++ );
++  
++  if ( ! (*p) || *p == '#' )
++    return;
++  
++  *arg = p;
++
++  for ( ; *p != '\0' && *p != '#' ; p++ );
++  for ( p-- ; isspace(*p) ; p-- );
++  p++;
++
++  *p = '\0';
++
++  return;
++}
++
++/* Write a string to standard out, while watching for "dangerous"
++   sequences like unescaped : and = characters */
++
++static void
++put_seq(str, follow)
++     char *str;
++     char follow;
++{
++  int danger = 1;
++
++  for ( ; *str ; str++ )
++    {
++      switch ( *str )
++	{
++	case '\\':
++	case '^':
++	  danger = !danger;
++	  break;
++
++	case ':':
++	case '=':
++	  if ( danger )
++	    putchar('\\');
++	  /* Fall through */
++
++	default:
++	  danger = 1;
++	  break;
++	}
++
++      putchar( *str );
++    }
++
++  putchar(follow);		/* The character that ends the sequence */
++}    
++
++/* Parser needs these state variables */
++enum states { st_termno, st_termyes, st_termsure, st_global };
++
++const char *slack_codes[] = {"NORMAL", "NORM", "FILE", "DIR", "LNK", "LINK",
++"SYMLINK", "ORPHAN", "MISSING", "FIFO", "PIPE", "SOCK", "BLK", "BLOCK",
++"CHR", "CHAR", "EXEC", "LEFT", "LEFTCODE", "RIGHT", "RIGHTCODE", "END",
++"ENDCODE", NULL};
++
++const char *ls_codes[] = {"no", "no", "fi", "di", "ln", "ln", "ln",
++"or", "mi", "pi", "pi", "so", "bd", "bd", "cd", "cd", "ex", "lc", "lc", "rc",
++"rc", "ec", "ec"};
++
++enum color_opts { col_yes, col_no, col_tty };
++
++int
++main (argc, argv)
++     int argc;
++     char *argv[];
++{
++  char *p, *q;
++  char *file = NULL;
++  int i;
++  int mode = mo_unknown;
++  FILE *fp = NULL;
++  char *term;
++  int state;
++
++  char line[STRINGLEN];
++  char useropts[2048] = "";
++  char *keywd, *arg;
++
++  int eightbit = 1;		/* Default to 8-bit */
++  int color_opt = col_no;	/* Assume --color=no */
++
++  int strict_slack = 0;		/* Strict Slackware compatibility */
++  int no_path = 0;		/* Do not search PATH */
++
++  char *copt, *bopt;
++  
++  /* Parse command line */
++
++  for ( i = 1 ; i < argc ; i++ )
++    {
++      if ( argv[i][0] == '-' )
++	{
++	  for ( p = &argv[i][1] ; *p ; p++ )
++	    {
++	      switch ( *p )
++		{
++		case 'a':
++		case 's':	/* Plain sh mode */
++		  mode = mo_sh;
++		  break;
++
++		case 'c':
++		case 't':
++		  mode = mo_csh;
++		  break;
++
++		case 'b':
++		case 'k':
++		  mode = mo_ksh;
++		  break;
++
++		case 'z':
++		  mode = mo_zsh;
++		  break;
++
++		case 'P':
++		  no_path = 1;
++		  break;
++
++		case 'S':
++		  strict_slack = 1;
++		  eightbit = 0;	/* Default to 7-bit */
++		  break;
++
++		case 'v':
++		  printf("For %s with color-ls patch %s\n",
++			 version_string, color_ls_version);
++		  exit(0);
++
++		default:
++		  fprintf(stderr, "%s: Unknown option -%c\n", argv[0], *p);
++		  exit(1);
++		}
++	    }
++	}
++      else
++	file = argv[i];
++    }
++
++  /* Use shell to determine mode, if not already done. */
++
++  if ( mode == mo_unknown )
++    {
++      mode = figure_mode(argv[0]);
++      if ( mode == mo_err )
++	exit(1);
++    }
++
++  /* Open dir_colors file */
++
++  if ( !file )
++    {
++      p = getenv("HOME");
++      if ( p && *p )
++	{
++	  chdir(p);
++	  fp = fopen(USER_FILE, "r");
++	}
++
++      if ( !fp )
++	fp = fopen(ETC_DIR SYSTEM_FILE, "r");
++    }
++  else
++    fp = fopen(file, "r");
++  
++  if ( !fp )
++    {
++      perror(argv[0]);
++      exit(1);
++    }
++
++  /* Get terminal type */
++
++  term = getenv("TERM");
++  if ( !term || !(*term) )
++    term = "none";
++
++  /* Write out common start */
++
++  switch ( mode )
++    {
++    case mo_csh:
++      printf("set noglob;\n\
++setenv LS_COLORS \':");
++      break;
++    case mo_sh:
++    case mo_ksh:
++    case mo_zsh:
++      printf("LS_COLORS=\'");
++      break;
++    }
++
++  /* Start parsing that sucker */
++
++  state = st_global;
++
++  while ( fgets(line,STRINGLEN,fp) != NULL )
++    {
++      parse_line(&keywd, &arg, line);
++      if ( *keywd )
++	{
++	  if ( strcasecmp(keywd, "TERM") == 0 )
++	    {
++	      if ( strcmp(arg, term) == 0 )
++		{
++		  state = st_termsure;
++		  strict_slack = 0; /* We've fulfilled the requirement */
++		}
++	      else if ( state != st_termsure )
++		state = st_termno;
++	    }
++	  else
++	    {
++	      if ( state == st_termsure )
++		state = st_termyes; /* Another TERM can cancel */
++	      
++	      if ( state != st_termno )
++		{
++		  if ( keywd[0] == '.' )
++		    {
++		      putchar('*');
++		      put_seq(keywd,'=');
++		      put_seq(arg,':');
++		    }
++		  else if ( keywd[0] == '*' )
++		    {
++		      put_seq(keywd,'=');
++		      put_seq(arg,':');
++		    }
++		  else if ( strcasecmp(keywd, "OPTIONS") == 0 )
++		    {
++		      strcat(useropts, " ");
++		      strcat(useropts, arg);
++		    }
++		  else if ( strcasecmp(keywd, "COLOR") == 0 )
++		    {
++		      switch ( arg[0] )
++			{
++			case 'a':
++			case 'y':
++			case '1':
++			  color_opt = col_yes;
++			  break;
++
++			case 'n':
++			case '0':
++			  color_opt = col_no;
++			  break;
++
++			case 't':
++			  color_opt = col_tty;
++			  break;
++			  
++			default:
++			  fprintf(stderr, "%s: Unknown COLOR option `%s'\n",
++				  argv[0], arg);
++			  break;
++			}
++		    }
++		  else if ( strcasecmp(keywd, "EIGHTBIT") == 0 )
++		    {
++		      switch( arg[0] )
++			{
++			case 'y':
++			case '1':
++			  eightbit = 1;
++			      break;
++			  
++			case 'n':
++			case '0':
++			  eightbit = 0;
++			  break;
++			  
++			default:
++			  fprintf(stderr, "%s: Unknown EIGHTBIT option `%s'\n",
++				  argv[0], arg);
++			  break;
++			}
++		    }
++		  else
++		    {
++		      for ( i = 0 ; slack_codes[i] ; i++ )
++			{
++			  if ( strcasecmp(keywd, slack_codes[i]) == 0 )
++			    break;
++			}
++
++		      if ( slack_codes[i] )
++			{
++			  printf("%s=", ls_codes[i]);
++			  put_seq(arg,':');
++			}
++		      else
++			fprintf(stderr, "%s: Unknown keyword %s\n",
++				argv[0], keywd);
++		    }
++		}
++	    }
++	}
++    }
++
++  fclose(fp);
++
++  /* If strict_slack is still set, we force COLOR to no */
++
++  if ( strict_slack )
++    color_opt = col_no;
++
++  /* Decide on the options */
++  
++  switch ( color_opt )
++    {
++    case col_yes:
++      copt = "--color=yes";
++      break;
++
++    case col_no:
++      copt = "--color=no";
++      break;
++
++    case col_tty:
++      copt = "--color=tty";
++      break;
++    }
++
++  bopt = eightbit ? "--8bit" : "--7bit";
++
++  /* Find ls in the path */
++  
++  if ( !no_path )
++    {
++      no_path = 1;		/* Assume we won't find one */
++
++      p = getenv("PATH");
++      if ( p && *p )
++	{
++	  while ( *p )
++	    {
++	      while ( *p == ':' )
++		p++;
++
++	      if ( *p != '/' )	/* Skip relative path entries */
++		while ( *p && *p != ':' )
++		  p++;
++	      else
++		{
++		  q = line;
++		  while ( *p && *p != ':' )
++		    *(q++) = *(p++);
++		  /* Make sure it ends in slash */
++		  if ( *(q-1) != '/' )
++		    *(q++) = '/';
++
++		  strcpy(q, "ls");
++		  if ( access(line, X_OK) == 0 )
++		    {
++		      no_path = 0; /* Found it */
++		      break;
++		    }
++		}
++	    }
++	}
++    }
++  
++  /* Write it out */
++
++  switch ( mode )
++    {
++    case mo_sh:
++      if ( no_path )
++	printf("\';\n\
++export LS_COLORS;\n\
++LS_OPTIONS='%s %s%s';\n\
++export LS_OPTIONS;\n\
++ls () { ( exec ls $LS_OPTIONS \"$@\" ) };\n\
++dir () { ( exec dir $LS_OPTIONS \"$@\" ) };\n\
++vdir () { ( exec vdir $LS_OPTIONS \"$@\" ) };\n\
++d () { dir \"$@\" ; };\n\
++v () { vdir \"$@\" ; };\n", bopt, copt, useropts);
++      else
++	printf("\';\n\
++export LS_COLORS;\n\
++LS_OPTIONS='%s %s%s';\n\
++ls () { %s $LS_OPTIONS \"$@\" ; };\n\
++dir () { %s $LS_OPTIONS --format=vertical \"$@\" ; };\n\
++vdir () { %s $LS_OPTIONS --format=long \"$@\" ; };\n\
++d () { dir \"$@\" ; };\n\
++v () { vdir \"$@\" ; };\n", bopt, copt, useropts, line, line, line);
++      break;
++
++    case mo_csh:
++      if ( no_path )
++	printf("\';\n\
++setenv LS_OPTIONS '%s %s%s';\n\
++alias ls \'ls $LS_OPTIONS\';\n\
++alias dir \'dir $LS_OPTIONS\';\n\
++alias vdir \'vdir $LS_OPTIONS\';\n\
++alias d dir;\n\
++alias v vdir;\n\
++unset noglob;\n", bopt, copt, useropts);
++      else
++	printf("\';\n\
++setenv LS_OPTIONS '%s %s%s';\n\
++alias ls \'%s $LS_OPTIONS\';\n\
++alias dir \'%s $LS_OPTIONS --format=vertical\';\n\
++alias vdir \'%s $LS_OPTIONS --format=long\';\n\
++alias d dir;\n\
++alias v vdir;\n\
++unset noglob;\n", bopt, copt, useropts, line, line, line);
++      break;
++
++    case mo_ksh:
++      if ( no_path )
++      printf("\';\n\
++export LS_COLORS;\n\
++LS_OPTIONS='%s %s%s';\n\
++export LS_OPTIONS;\n\
++alias ls=\'ls $LS_OPTIONS\';\n\
++alias dir=\'dir $LS_OPTIONS\';\n\
++alias vdir=\'vdir $LS_OPTIONS\';\n\
++alias d=dir;\n\
++alias v=vdir;\n", bopt, copt, useropts);
++      else
++	printf("\';\n\
++export LS_COLORS;\n\
++LS_OPTIONS='%s %s%s';\n\
++export LS_OPTIONS;\n\
++alias ls=\'%s $LS_OPTIONS\';\n\
++alias dir=\'%s $LS_OPTIONS --format=vertical\';\n\
++alias vdir=\'%s $LS_OPTIONS --format=long\';\n\
++alias d=dir;\n\
++alias v=vdir;\n", bopt, copt, useropts, line, line, line);
++      break;
++
++    case mo_zsh:
++      if ( no_path )
++      printf("\';\n\
++export LS_COLORS;\n\
++LS_OPTIONS=(%s %s%s);\n\
++export LS_OPTIONS;\n\
++alias ls=\'ls $LS_OPTIONS\';\n\
++alias dir=\'dir $LS_OPTIONS\';\n\
++alias vdir=\'vdir $LS_OPTIONS\';\n\
++alias d=dir;\n\
++alias v=vdir;\n", bopt, copt, useropts);
++      else
++	printf("\';\n\
++export LS_COLORS;\n\
++LS_OPTIONS=(%s %s%s);\n\
++export LS_OPTIONS;\n\
++alias ls=\'%s $LS_OPTIONS\';\n\
++alias dir=\'%s $LS_OPTIONS --format=vertical\';\n\
++alias vdir=\'%s $LS_OPTIONS --format=long\';\n\
++alias d=dir;\n\
++alias v=vdir;\n", bopt, copt, useropts, line, line, line);
++      break;
++    }
++
++  exit(0);
++}
+diff -urN orig/fileutils-3.12/src/ls.c fileutils-3.12/src/ls.c
+--- orig/fileutils-3.12/src/ls.c	Thu Nov  3 21:08:15 1994
++++ fileutils-3.12/src/ls.c	Mon Jul 17 13:15:15 1995
+@@ -15,23 +15,34 @@
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.  */
+ 
+-/* If the macro MULTI_COL is defined,
++/* If the first character after the last slash in argv[0] is 'd',
+    the multi-column format is the default regardless
+    of the type of output device.
+    This is for the `dir' program.
+ 
+-   If the macro LONG_FORMAT is defined,
++   If the first character after the last slash in argv[0] is 'v',
+    the long format is the default regardless of the
+    type of output device.
+    This is for the `vdir' program.
+ 
+-   If neither is defined,
++   If the first character after the last slash in argv[0] is 'l',
+    the output format depends on whether the output
+    device is a terminal.
+-   This is for the `ls' program. */
++   This is for the `ls' program.
++
++   If it is anything else, the default will depend on if this program
++   is linked with ls-ls.c, ls-dir.c or ls-vdir.c.
++
++   This behaviour can be overridden by defining NO_NAME_DEPENDENCE
++   at compile time.  */
+ 
+ /* Written by Richard Stallman and David MacKenzie. */
+ 
++/* Colour and 8-bit support by Peter Anvin <Peter.Anvin@linux.org>
++   and Dennis Flaherty <dennisf@denix.elk.miles.com> based on original
++   patches by Greg Lee <lee@uhunix.uhcc.hawaii.edu>.  See file
++   color-ls.log for revision history. */
++
+ #ifdef _AIX
+  #pragma alloca
+ #endif
+@@ -112,6 +123,7 @@
+ static int compare_extension ();
+ static int rev_cmp_extension ();
+ static int decode_switches ();
++static void parse_ls_color ();
+ static int file_interesting ();
+ static int gobble_file ();
+ static int is_not_dot_or_dotdot ();
+@@ -128,8 +140,11 @@
+ static void print_horizontal ();
+ static void print_long_format ();
+ static void print_many_per_line ();
++static void print_fancy_name ();
+ static void print_name_with_quoting ();
+ static void print_type_indicator ();
++static void print_color_indicator ();
++static void put_indicator ();
+ static void print_with_commas ();
+ static void queue_directory ();
+ static void sort_files ();
+@@ -160,6 +175,10 @@
+   /* For symbolic link and long listing, st_mode of file linked to, otherwise
+      zero. */
+   unsigned int linkmode;
++  
++  /* For symbolic link and color printing, 1 if linked-to file exits,
++     otherwise 0 */
++  int linkok;
+ 
+   enum filetype filetype;
+ };
+@@ -212,7 +231,7 @@
+    one_per_line for just names, one per line.
+    many_per_line for just names, many per line, sorted vertically.
+    horizontal for just names, many per line, sorted horizontally.
+-   with_commas for just names, many per line, separated by commas.
++   with_commas for just names, many per line, separated by commas
+ 
+    -l, -1, -C, -x and -m control this parameter.  */
+ 
+@@ -238,7 +257,7 @@
+ 
+ static enum time_type time_type;
+ 
+-/* print the full time, otherwise the standard unix heuristics. */
++/* print the full time, otherwise the standard unix heuristics. -e */
+ 
+ int full_time;
+ 
+@@ -303,6 +322,77 @@
+ 
+ static enum indicator_style indicator_style;
+ 
++/* Nonzero means use colors to mark types.  Also define the different
++   colors as well as the stuff for the LS_COLORS environment variable.
++   The LS_COLORS variable is now in a termcap-like format.  -o */
++
++int print_with_color;
++
++enum color_type
++{
++  color_no,			/* 0: default or --color=no */
++  color_yes,			/* 1: -o or --color=yes */
++  color_if_tty			/* 2: --color=tty */
++};
++
++/* Note that color_no and color_yes equals boolean values; they will
++   be assigned to print_with_color which is a boolean variable */
++
++enum indicator_no
++{ C_LEFT, C_RIGHT, C_END, C_NORM, C_FILE, C_DIR, C_LINK, C_FIFO, C_SOCK, 
++  C_BLK, C_CHR, C_MISSING, C_ORPHAN, C_EXEC };
++
++char *indicator_name[]=
++{
++  "lc","rc","ec","no","fi","di","ln","pi","so","bd","cd","mi","or","ex",0
++};
++
++/* Null is a valid character in a color indicator (think about Epson
++   printers, for example) so we have to use a length/buffer string
++   type. */
++
++struct bin_str
++{
++  unsigned int len;		/* Number of bytes */
++  char *string;			/* Pointer to the same */
++};
++
++struct bin_str color_indicator[] =
++{
++  { 2, "\033[" },		/* lc: Left of color sequence */
++  { 1, "m" },			/* rc: Right of color sequence */
++  { 0, NULL },			/* ec: End color (replaces lc+no+rc) */
++  { 1, "0" },			/* no: Normal */
++  { 1, "0" },			/* fi: File: default */
++  { 2, "32" },			/* di: Directory: green */
++  { 2, "36" },			/* ln: Symlink: cyan */
++  { 2, "31" },			/* pi: Pipe: red */
++  { 2, "33" },			/* so: Socket: yellow/brown */
++  { 5, "44;37" },		/* bd: Block device: white on blue */
++  { 5, "44;37" },		/* cd: Char device: white on blue */
++  { 0, NULL },			/* mi: Missing file: undefined */
++  { 0, NULL },			/* or: Orphanned symlink: undefined */
++  { 2, "35" }			/* ex: Executable: purple */
++};
++
++struct col_ext_type
++{
++  struct bin_str ext;		/* The extension we're looking for */
++  struct bin_str seq;		/* The sequence to output when we do */
++  struct col_ext_type *next;	/* Next in list */
++};
++
++struct col_ext_type *col_ext_list = NULL;
++char *color_buf;		/* Buffer for color sequences */
++
++/* Nonzero means print using ISO 8859 characters.  The default is specified
++   here as well.  -8 enables, -7 disables.  */
++
++int print_iso8859;
++#ifndef DEFAULT_ISO8859
++#define DEFAULT_ISO8859  1
++#endif
++
+ /* Nonzero means mention the inode number of each file.  -i  */
+ 
+ static int print_inode;
+@@ -399,7 +489,7 @@
+   {"escape", no_argument, 0, 'b'},
+   {"directory", no_argument, 0, 'd'},
+   {"dired", no_argument, 0, 'D'},
+-  {"full-time", no_argument, &full_time, 1},
++  {"full-time", no_argument, 0, 'e'},
+   {"inode", no_argument, 0, 'i'},
+   {"kilobytes", no_argument, 0, 'k'},
+   {"numeric-uid-gid", no_argument, 0, 'n'},
+@@ -423,6 +513,10 @@
+   {"time", required_argument, 0, 11},
+   {"help", no_argument, &show_help, 1},
+   {"version", no_argument, &show_version, 1},
++  {"color", optional_argument, 0, 13},
++  {"colour", optional_argument, 0, 13},
++  {"7bit", no_argument, 0, '7'},
++  {"8bit", no_argument, 0, '8'},
+   {0, 0, 0, 0}
+ };
+ 
+@@ -501,6 +595,18 @@
+   time_atime, time_atime, time_atime, time_ctime, time_ctime
+ };
+ 
++static char const* color_args[] = 
++{
++  /* Note: "no" is a prefix of "none" so we don't include it */
++  /* force and none are for compatibility with another color-ls version */ 
++  "yes", "force", "none", "tty", "if-tty", 0
++};
++
++static enum color_type const color_types[] =
++{
++  color_yes, color_yes, color_no, color_if_tty, color_if_tty
++};
++
+ 
+ /* Write to standard output the string PREFIX followed by a space-separated
+    list of the integers stored in OS all on one line.  */
+@@ -540,17 +646,20 @@
+ 
+   if (show_version)
+     {
+-      printf ("%s\n", version_string);
++      printf ("%s with color-ls patch %s\n", version_string, color_ls_version);
+       exit (0);
+     }
+ 
+   if (show_help)
+     usage (0);
+ 
++  if ( print_with_color )
++    parse_ls_color();
++ 
+   format_needs_stat = sort_type == sort_time || sort_type == sort_size
+     || format == long_format
+     || trace_links || trace_dirs || indicator_style != none
+-    || print_block_size || print_inode;
++    || print_block_size || print_inode || print_with_color;
+ 
+   if (dired && format == long_format)
+     {
+@@ -614,6 +723,19 @@
+ 	dired_dump_obstack ("//SUBDIRED//", &subdired_obstack);
+     }
+ 
++  if (print_with_color)
++    {
++      struct col_ext_type *ext;
++
++      free(color_buf);
++      while ( col_ext_list )
++	{
++	  ext = col_ext_list;
++	  col_ext_list = col_ext_list->next;
++	  free(ext);
++	}
++    }
++
+   exit (exit_status);
+ }
+ 
+@@ -634,6 +756,60 @@
+ 
+   /* initialize all switches to default settings */
+ 
++  /* program_name is advertised as being the program name without
++     any leading path, but that doesn't seem to be the case.  Get the
++     first character of the actual program name. */
++
++#if defined(STDC_HEADERS) || defined(HAVE_STRING_H)
++  p = strrchr(program_name,'/');
++#else
++  {
++    /* Lame version of strrchr() for lame systems */
++    
++    register char *q;
++
++    p = NULL;
++    for ( q = program_name ; *q ; q++ )
++      {
++	if ( *q == '/' )
++	  p = q;
++      }
++  }
++#endif
++
++#ifndef NO_NAME_DEPENDENCE
++  if ( p )
++    p++;			/* Get character after last / */
++  else
++    p = program_name;		/* Get first character */
++
++  switch(*p)
++    {
++    case 'D':
++    case 'd':
++      /* This is for the 'dir' program. */
++      ls_mode = LS_MULTI_COL;
++      break;
++
++    case 'V':
++    case 'v':
++      /* This is for the 'vdir' program. */
++      ls_mode = LS_LONG_FORMAT;
++      break;
++
++    case 'L':
++    case 'l':
++      /* This is for the `ls' program. */
++      ls_mode = LS_LS;
++      break;
++      
++    default:
++      /* Use default, depending on whenether linked with ls-ls.o,
++	 ls-dir.o or ls-vdir.o */
++      break;
++    }
++#endif
++
+   switch (ls_mode)
+     {
+     case LS_MULTI_COL:
+@@ -682,6 +858,8 @@
+   really_all_files = 0;
+   ignore_patterns = 0;
+   quote_as_string = 0;
++  print_with_color = 0;
++  print_iso8859 = DEFAULT_ISO8859;  
+ 
+   p = getenv ("COLUMNS");
+   line_length = p ? atoi (p) : 80;
+@@ -698,7 +876,11 @@
+   p = getenv ("TABSIZE");
+   tabsize = p ? atoi (p) : 8;
+ 
+-  while ((c = getopt_long (argc, argv, "abcdfgiklmnpqrstuw:xABCDFGI:LNQRST:UX1",
++  if ( tabsize == 0 )
++    tabsize = line_length;	/* Never use tabs */
++
++  while ((c = getopt_long (argc, argv,
++			   "abcdefgiklmnopqrstuw:xABCDFGI:LNQRST:UX178",
+ 			   long_options, (int *) 0)) != EOF)
+     {
+       switch (c)
+@@ -724,8 +906,12 @@
+ 	  immediate_dirs = 1;
+ 	  break;
+ 
++	case 'e':
++	  full_time = 1;
++	  break;
++
+ 	case 'f':
+-	  /* Same as enabling -a -U and disabling -l -s.  */
++	  /* Same as enabling -a -U and disabling -l -s -o.  */
+ 	  all_files = 1;
+ 	  really_all_files = 1;
+ 	  sort_type = sort_none;
+@@ -733,6 +919,7 @@
+ 	  if (format == long_format)
+ 	    format = (isatty (1) ? many_per_line : one_per_line);
+ 	  print_block_size = 0;  /* disable -s */
++	  print_with_color = 0;  /* disable -o */
+ 	  break;
+ 
+ 	case 'g':
+@@ -759,6 +946,14 @@
+ 	  numeric_users = 1;
+ 	  break;
+ 
++	case 'o':
++	  print_with_color = !print_with_color;
++	  
++	  if ( print_with_color )
++	    tabsize = line_length; /* Some systems don't like tabs and
++				      color codes in combination */
++	  break;
++
+ 	case 'p':
+ 	  indicator_style = not_programs;
+ 	  break;
+@@ -848,8 +1043,10 @@
+ 
+ 	case 'T':
+ 	  tabsize = atoi (optarg);
+-	  if (tabsize < 1)
++	  if (tabsize < 0)
+ 	    error (1, 0, "invalid tab size: %s", optarg);
++	  else if (tabsize == 0)
++	    tabsize = line_length;
+ 	  break;
+ 
+ 	case 'U':
+@@ -864,7 +1061,15 @@
+ 	  format = one_per_line;
+ 	  break;
+ 
+-	case 10:		/* +sort */
++	case '7':
++	  print_iso8859 = 0;
++	  break;
++
++	case '8':
++	  print_iso8859 = 1;
++	  break;
++
++	case 10:		/* --sort */
+ 	  i = argmatch (optarg, sort_args);
+ 	  if (i < 0)
+ 	    {
+@@ -874,7 +1079,7 @@
+ 	  sort_type = sort_types[i];
+ 	  break;
+ 
+-	case 11:		/* +time */
++	case 11:		/* --time */
+ 	  i = argmatch (optarg, time_args);
+ 	  if (i < 0)
+ 	    {
+@@ -884,7 +1089,7 @@
+ 	  time_type = time_types[i];
+ 	  break;
+ 
+-	case 12:		/* +format */
++	case 12:		/* --format */
+ 	  i = argmatch (optarg, format_args);
+ 	  if (i < 0)
+ 	    {
+@@ -894,6 +1099,30 @@
+ 	  format = formats[i];
+ 	  break;
+ 
++	case 13:                /* --color */ 
++	  if (optarg)
++	    {
++	      i = argmatch(optarg, color_args);
++	      if (i < 0)
++		{
++		  invalid_arg("colorization criterion", optarg, i);
++		  usage(1);
++		}
++	      i = color_types[i];
++	    }
++	  else
++	    i = color_yes;	/* Only --color -> --color=yes */
++
++	  if ( i == color_if_tty )
++	    print_with_color = isatty(1) ? 1 : 0;
++	  else
++	    print_with_color = i;
++
++	  if ( print_with_color )
++	    tabsize = line_length; /* Some systems don't like tabs and
++				      color codes in combination */
++	  break;
++	    
+ 	default:
+ 	  usage (1);
+ 	}
+@@ -902,6 +1131,332 @@
+   return optind;
+ }
+ 
++/* Parse the LS_COLORS/LS_COLOURS variable */
++
++static void
++parse_ls_color ()
++{
++  char *p;			/* Pointer to character being parsed */
++  char *whichvar;		/* LS_COLORS or LS_COLOURS? */
++  char *buf;			/* color_buf buffer pointer */
++  int state;			/* State of parser */
++  int ind_no;			/* Indicator number */
++  char label[3] = "??";		/* Indicator label */
++  struct col_ext_type *ext;	/* Extension we are working on */
++  struct col_ext_type *ext2;	/* Extra pointer */
++
++  if ( (p = getenv(whichvar = "LS_COLORS")) ||
++       (p = getenv(whichvar = "LS_COLOURS")) )
++    {
++      buf = color_buf = xmalloc(strlen(p));
++      /* This is an overly conservative estimate, but any possible
++         LS_COLORS string will *not* generate a color_buf longer than
++	 itself, so it is a safe way of allocating a buffer in
++	 advance. */
++      
++      state = 1;
++      while ( state > 0 )
++	{
++	  switch(state)
++	    {
++	    case 1:		/* First label character */
++	      switch ( *p )
++		{
++		case ':':
++		  p++;
++		  break;
++		  
++		case '*':
++		  /* Allocate new extension block and add to head
++		     of linked list (this way a later definition will
++		     override an earlier one, which can be useful for
++		     having terminal-specific defs override global) */
++		  
++		  ext = (struct col_ext_type *)
++		    xmalloc(sizeof(struct col_ext_type));
++		  ext->next = col_ext_list;
++		  col_ext_list = ext;
++
++		  p++;
++		  ext->ext.string = buf;
++		  
++		  state = (ext->ext.len =
++			   get_funky_string(&buf,&p,1)) < 0 ? -1 : 4;
++		  break;
++		  
++		case '\0':
++		  state = 0;	/* Done! */
++		  break;
++		  
++		default:	/* Assume it is file type label */
++		  label[0] = *(p++);
++		  state = 2;
++		  break;
++		}
++	      break;
++	      
++	    case 2:		/* Second label character */
++	      if ( *p )
++		{
++		  label[1] = *(p++);
++		  state = 3;
++		}
++	      else
++		state = -1;	/* Error */
++	      break;
++
++	    case 3:		/* Equal sign after indicator label */
++	      state = -1;	/* Assume failure... */
++	      if ( *(p++) == '=' )	/* It *should* be... */
++		{
++		  for ( ind_no = 0 ; indicator_name[ind_no] != NULL ;
++		       ind_no++ )
++		    {
++		      if ( strcmp(label,indicator_name[ind_no]) == 0 )
++			{
++			  color_indicator[ind_no].string = buf;
++			  state = (color_indicator[ind_no].len =
++				   get_funky_string(&buf,&p,0)) < 0 ?
++				     -1 : 1;
++			  break;
++			}
++		    }
++		  if ( state == -1 )
++		    fprintf(stderr, "Unknown prefix: %s\n", label);
++		}
++	      break;
++
++	    case 4:		/* Equal sign after *.ext */
++	      if ( *(p++) == '=' )
++		{
++		  ext->seq.string = buf;
++		  state = (ext->seq.len =
++			   get_funky_string(&buf,&p,0)) < 0 ?
++			     -1 : 1;
++		}
++	      else
++		state = -1;
++	      break;
++	    }
++	}
++
++      if ( state < 0 )
++	{
++	  fprintf(stderr, "Bad %s variable\n", whichvar);
++	  free(color_buf);
++	  for ( ext = col_ext_list ; ext != NULL ; )
++	    {
++	      ext2 = ext;
++	      ext = ext->next;
++	      free (ext2);
++	    }
++	  print_with_color = 0;
++	}
++    }
++}
++
++/* Parse a string as part of the LS_COLO(U)RS variable; this may involve
++   decoding all kinds of escape characters.  If equals_end is set an
++   unescaped equal sign ends the string, otherwise only a : or \0
++   does.  Returns the number of characters output, or -1 on failure.
++
++   The resulting string is *not* null-terminated, but may contain
++   embedded nulls.
++
++   Note that both dest and src are char **; on return they point to
++   the first free byte after the array and the character that ended
++   the input string, respectively. */
++
++int
++get_funky_string (dest, src, equals_end)
++     char **dest;
++     char **src;
++     int equals_end;
++{
++  int num;			/* For numerical codes */
++  int count;			/* Something to count with */
++  enum { st_gnd, st_backslash, st_octal, st_hex, st_caret,
++	 st_end, st_error } state;
++  char *p, *q;
++
++  p = *src;  q = *dest;		/* We don't want to double-indirect
++				   the whole darn time */
++  
++  count = 0;			/* No characters counted in yet */
++
++  state = st_gnd;		/* Start in ground state */
++  while ( state < st_end )
++    {
++      switch ( state )
++	{
++	case st_gnd:		/* Ground state (no escapes) */
++	  switch ( *p )
++	    {
++	    case ':':
++	    case '\0':
++	      state = st_end;	/* End of string */
++	      break;
++	    case '\\':
++	      state = st_backslash; /* Backslash scape sequence */
++	      p++;
++	      break;
++	    case '^':
++	      state = st_caret;	/* Caret escape */
++	      p++;
++	      break;
++	    case '=':
++	      if ( equals_end )
++		{
++		  state = st_end; /* End */
++		  break;
++		}
++	      /* else fall through */
++	    default:
++	      *(q++) = *(p++);
++	      count++;
++	      break;
++	    }
++	  break;
++
++	case st_backslash:	/* Backslash escaped character */
++	  switch ( *p )
++	    {
++	    case '0':
++	    case '1':
++	    case '2':
++	    case '3':
++	    case '4':
++	    case '5':
++	    case '6':
++	    case '7':
++	      state = st_octal;	/* Octal sequence */
++	      num = *p - '0';
++	      break;
++	    case 'x':
++	    case 'X':
++	      state = st_hex;	/* Hex sequence */
++	      num = 0;
++	      break;
++	    case 'a':		/* Bell */
++	      num = 7;		/* Not all C compilers know what \a means */
++	      break;
++	    case 'b':		/* Backspace */
++	      num = '\b';
++	      break;
++	    case 'e':		/* Escape */
++	      num = 27;
++	      break;
++	    case 'f':		/* Form feed */
++	      num = '\f';
++	      break;
++	    case 'n':		/* Newline */
++	      num = '\n';
++	      break;
++	    case 'r':		/* Carriage return */
++	      num = '\r';
++	      break;
++	    case 't':		/* Tab */
++	      num = '\t';
++	      break;
++	    case 'v':		/* Vtab */
++	      num = '\v';
++	      break;
++	    case '?':		/* Delete */
++	      num = 127;
++	      break;
++	    case '_':		/* Space */
++	      num = ' ';
++	      break;
++	    case '\0':		/* End of string */
++	      state = st_error;	/* Error! */
++	      break;
++	    default:		/* Escaped character like \ ^ : = */
++	      num = *p;
++	      break;
++	    }
++	  if ( state == st_backslash )
++	    {
++	      *(q++) = num;
++	      count++;
++	      state = st_gnd;
++	    }
++	  p++;
++	  break;
++
++	case st_octal:		/* Octal sequence */
++	  if ( *p < '0' || *p > '7' )
++	    {
++	      *(q++) = num;
++	      count++;
++	      state = st_gnd;
++	    }
++	  else
++	      num = ( num << 3 ) + ( *(p++) - '0' );
++	  break;
++
++	case st_hex:		/* Hex sequence */
++	  switch ( *p )
++	    {
++	    case '0':
++	    case '1':
++	    case '2':
++	    case '3':
++	    case '4':
++	    case '5':
++	    case '6':
++	    case '7':
++	    case '8':
++	    case '9':
++	      num = ( num << 4 ) + ( *(p++) - '0' );
++	      break;
++	    case 'a':
++	    case 'b':
++	    case 'c':
++	    case 'd':
++	    case 'e':
++	    case 'f':
++	      num = ( num << 4 ) + ( *(p++) - 'a' ) + 10;
++	      break;
++	    case 'A':
++	    case 'B':
++	    case 'C':
++	    case 'D':
++	    case 'E':
++	    case 'F':
++	      num = ( num << 4 ) + ( *(p++) - 'A' ) + 10;
++	      break;
++	    default:
++	      *(q++) = num;
++	      count++;
++	      state = st_gnd;
++	      break;
++	    }
++	  break;
++
++	case st_caret:		/* Caret escape */
++	  state = st_gnd;	/* Should be the next state... */
++	  if ( *p >= '@' && *p <= '~' )
++	    {
++	      *(q++) = *(p++) & 037;
++	      count++;
++	    }
++	  else if ( *p == '?' )
++	    {
++	      *(q++) = 127;
++	      count++;
++	    }
++	  else
++	    state = st_error;
++	  break;
++	}
++    }
++
++  *dest = q;  *src = p;
++
++  return ( state == st_error ) ? -1 : count;
++}
++
++
+ /* Request that the directory named `name' have its contents listed later.
+    If `realname' is nonzero, it will be used instead of `name' when the
+    directory name is printed.  This allows symbolic links to directories
+@@ -1112,7 +1667,7 @@
+ 
+ #ifdef S_ISLNK
+       if (S_ISLNK (files[files_index].stat.st_mode)
+-	  && (explicit_arg || format == long_format))
++	  && (explicit_arg || format == long_format || print_with_color))
+ 	{
+ 	  char *linkpath;
+ 	  struct stat linkstats;
+@@ -1124,8 +1679,9 @@
+ 	     they won't be traced and when no indicator is needed. */
+ 	  if (linkpath
+ 	      && ((explicit_arg && format != long_format)
+-		   || indicator_style != none)
+-	      && SAFE_STAT (linkpath, &linkstats) == 0)
++		   || indicator_style != none || print_with_color)
++	      && ( files[files_index].linkok =
++		  (SAFE_STAT (linkpath, &linkstats) == 0) ) )
+ 	    {
+ 	      /* Symbolic links to directories that are mentioned on the
+ 		 command line are automatically traced if not being
+@@ -1153,7 +1709,7 @@
+ 	    free (linkpath);
+ 	}
+ #endif
+-
++      
+ #ifdef S_ISLNK
+       if (S_ISLNK (files[files_index].stat.st_mode))
+ 	files[files_index].filetype = symbolic_link;
+@@ -1617,7 +2173,7 @@
+   DIRED_INDENT ();
+   FPUTS (bigbuf, stdout, p - bigbuf);
+   PUSH_CURRENT_DIRED_POS (&dired_obstack);
+-  print_name_with_quoting (f->name);
++  print_fancy_name (f->name, f->stat.st_mode, f->linkok);
+   PUSH_CURRENT_DIRED_POS (&dired_obstack);
+ 
+   if (f->filetype == symbolic_link)
+@@ -1625,7 +2181,7 @@
+       if (f->linkname)
+ 	{
+ 	  FPUTS_LITERAL (" -> ", stdout);
+-	  print_name_with_quoting (f->linkname);
++	  print_fancy_name (f->linkname, f->linkmode, f->linkok-1);
+ 	  if (indicator_style != none)
+ 	    print_type_indicator (f->linkmode);
+ 	}
+@@ -1644,7 +2200,7 @@
+      register const char *p;
+      size_t *quoted_length;
+ {
+-  register unsigned char c;
++  register unsigned char c;	/* Unsigned for ISO 8859 test */
+   const char *p0 = p;
+   char *quoted, *q;
+   int found_quotable;
+@@ -1675,7 +2231,8 @@
+ 
+ 	    default:
+ 	      /* FIXME: why not just use the ISPRINT macro here?  */
+-	      if (!(c > 040 && c < 0177))
++	      if (!(c > 040 && c < 0177) &&
++		  !(print_iso8859 && c > 0241 && c < 0377))
+ 		found_quotable = 1;
+ 	      break;
+ 	    }
+@@ -1806,13 +2363,38 @@
+ 	    (unsigned) convert_blocks (ST_NBLOCKS (f->stat),
+ 				       kilobyte_blocks));
+ 
+-  print_name_with_quoting (f->name);
++  print_fancy_name (f->name, f->stat.st_mode, f->linkok);
+ 
+   if (indicator_style != none)
+     print_type_indicator (f->stat.st_mode);
+ }
+ 
+ static void
++print_fancy_name (name, mode, linkok)
++     char *name;
++     unsigned int mode;
++     int linkok;
++{
++  if (print_with_color)
++    {
++      print_color_indicator(name, mode, linkok);
++      print_name_with_quoting(name);
++      if ( color_indicator[C_END].string )
++	{
++	  put_indicator(&color_indicator[C_END]);
++	}
++      else
++	{
++	  put_indicator(&color_indicator[C_LEFT]);
++	  put_indicator(&color_indicator[C_NORM]);
++	  put_indicator(&color_indicator[C_RIGHT]);
++	}
++    }
++  else
++    print_name_with_quoting(name);
++}
++
++static void
+ print_type_indicator (mode)
+      unsigned int mode;
+ {
+@@ -1839,12 +2421,99 @@
+     PUTCHAR ('*');
+ }
+ 
++static void
++print_color_indicator (name, mode, linkok)
++     char *name;
++     unsigned int mode;
++     int linkok;
++{
++  int i;
++  int shi;			/* Bits to shift mode */
++  int type = C_FILE;
++  struct col_ext_type *ext;	/* Color extension */
++  int len;			/* Length of name */
++
++  /* Is this a nonexistent file?  If so, linkok == -1 */
++
++  if ( linkok == -1 && color_indicator[C_MISSING].string )
++    {
++      ext = NULL;
++      type = C_MISSING;
++    }
++  else
++    {
++      /* Test if is is a recognized extension */
++
++      len = strlen(name);
++      name += len;			/* Pointer to final \0 */
++      for ( ext = col_ext_list ; ext != NULL ; ext = ext->next )
++	{
++	  if ( ext->ext.len <= len &&
++	      strncmp(name-ext->ext.len,ext->ext.string,ext->ext.len)  == 0 )
++	    break;
++	}
++      
++      if ( !ext )
++	{
++	  if (S_ISDIR (mode))
++	    type = C_DIR;
++	  
++#ifdef S_ISLNK
++	  else if (S_ISLNK (mode))
++	    type = (!linkok && color_indicator[C_ORPHAN].string) ?
++	      C_ORPHAN : C_LINK;
++#endif
++	  
++#ifdef S_ISFIFO
++	  else if (S_ISFIFO (mode))
++	    type = C_FIFO;
++#endif
++      
++#ifdef S_ISSOCK
++	  else if (S_ISSOCK (mode))
++	    type = C_SOCK;
++#endif
++	  
++#ifdef S_ISBLK
++	  else if (S_ISBLK (mode))
++	    type = C_BLK;
++#endif
++	  
++#ifdef S_ISCHR
++	  else if (S_ISCHR (mode))
++	    type = C_CHR;
++#endif
++
++      if ( type == C_FILE && (mode & (S_IEXEC|S_IEXEC>>3|S_IEXEC>>6)) )
++	type = C_EXEC;
++	}
++    }
++
++  put_indicator(&color_indicator[C_LEFT]);
++  put_indicator(ext ? &(ext->seq) : &color_indicator[type]);
++  put_indicator(&color_indicator[C_RIGHT]);
++}
++
++/* Output a color indicator (which may contain nulls) */
++static void
++put_indicator(ind)
++     struct bin_str *ind;
++{
++  register int i;
++  register char *p;
++
++  p = ind->string;
++
++  for ( i = ind->len ; i ; i-- )
++    putchar(*(p++));
++}
++
+ static int
+ length_of_file_name_and_frills (f)
+      struct fileinfo *f;
+ {
+   register char *p = f->name;
+-  register char c;
++  register unsigned char c;	/* Unsigned for ISO 8859 test */
+   register int len = 0;
+ 
+   if (print_inode)
+@@ -1880,7 +2549,8 @@
+ 	      break;
+ 
+ 	    default:
+-	      if (c >= 040 && c < 0177)
++	      if ( (c >= 0x20 && c <= 0x7E) ||
++		   (print_iso8859 && c >= 0xA1 && c <= 0xFF) )
+ 		len += 1;
+ 	      else
+ 		len += 4;
+@@ -2117,11 +2787,11 @@
+   -c                         sort by change time; with -l: show ctime\n\
+   -D, --dired                generate output well suited to Emacs' dired mode\n\
+   -d, --directory            list directory entries instead of contents\n\
++  -e, --full-time            list both date and full time\n\
+   -F, --classify             append a character for typing each entry\n\
+-  -f                         do not sort, enable -aU, disable -lst\n\
++  -f                         do not sort, enable -aU, disable -lsto\n\
+       --format=WORD          across -x, commas -m, horizontal -x, long -l,\n\
+-                               single-column -1, verbose -l, vertical -C\n\
+-      --full-time            list both full date and full time\n");
++                               single-column -1, verbose -l, vertical -C\n");
+ 
+       printf ("\
+   -G, --no-group             inhibit display of group information\n\
+@@ -2134,6 +2804,8 @@
+   -m                         fill width with a comma separated list of entries\n\
+   -N, --literal              do not quote entry names\n\
+   -n, --numeric-uid-gid      list numeric UIDs and GIDs instead of names\n\
++  -o, --color, --colour      colorize entries according to type\n\
++      --colo(u)r=WORD        yes -o, no, tty (if output is a terminal)\n\
+   -p                         append a character for typing each entry\n\
+   -Q, --quote-name           enclose entry names in double quotes\n\
+   -q, --hide-control-chars   print ? instead of non graphic characters\n\
+diff -urN orig/fileutils-3.12/src/version.c fileutils-3.12/src/version.c
+--- orig/fileutils-3.12/src/version.c	Sat Nov  5 21:43:18 1994
++++ fileutils-3.12/src/version.c	Mon Jul 17 13:57:21 1995
+@@ -1,3 +1,4 @@
+ #include <config.h>
+ #include "version.h"
+ const char *version_string = "GNU fileutils 3.12";
++const char *color_ls_version = "3.12.0.3";
+diff -urN orig/fileutils-3.12/src/version.h fileutils-3.12/src/version.h
+--- orig/fileutils-3.12/src/version.h	Mon Apr  5 07:29:16 1993
++++ fileutils-3.12/src/version.h	Mon Jul 17 12:59:02 1995
+@@ -1 +1 @@
+-extern const char *version_string;
++extern const char *version_string, *color_ls_version;

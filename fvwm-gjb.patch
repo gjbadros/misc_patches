@@ -1,0 +1,355 @@
+*** version.h	1996/09/18 17:07:39	1.1
+--- version.h	1996/09/18 17:07:47
+***************
+*** 1,2 ****
+! #define VERSION "2.0.43"
+  
+--- 1,2 ----
+! #define VERSION "2.0.43-gjb"
+  
+*** fvwm/builtins.c	1996/09/18 17:14:34	1.1
+--- fvwm/builtins.c	1996/09/18 17:22:26
+***************
+*** 1207,1212 ****
+--- 1207,1219 ----
+    free(tmp);
+  }
+  
++ void InfoMsg(XEvent *eventp,Window w,FvwmWindow *tmp_win,
++ 	     unsigned long context, char *action, int* Module)
++ {
++     action[strlen(action)-1] = 0; /* chop off \n */
++     fvwm_msg(INFO,"Parser",action);
++ }
++ 
+  #ifdef FVWM_MODULEDIR
+  char *ModulePath = FVWM_MODULEDIR;
+  #else
+*** fvwm/functions.c	1996/09/18 17:11:25	1.1
+--- fvwm/functions.c	1996/09/18 17:12:15
+***************
+*** 63,68 ****
+--- 63,69 ----
+    {"Iconify",      iconify_function, F_ICONIFY,             FUNC_NEEDS_WINDOW},
+    {"IconFont",     LoadIconFont,     F_ICONFONT,            FUNC_NO_WINDOW},
+    {"IconPath",     setIconPath,      F_ICON_PATH,           FUNC_NO_WINDOW},
++   {"InfoMsg",      InfoMsg,          F_INFO_MSG,            FUNC_NO_WINDOW},
+    {"Key",          ParseKeyEntry,    F_KEY,                 FUNC_NO_WINDOW},
+    {"Lower",        lower_function,   F_LOWER,               FUNC_NEEDS_WINDOW},
+    {"Maximize",     Maximize,         F_MAXIMIZE,            FUNC_NEEDS_WINDOW},
+*** fvwm/misc.h	1996/09/18 17:19:02	1.1
+--- fvwm/misc.h	1996/09/18 17:19:25
+***************
+*** 439,444 ****
+--- 439,446 ----
+  void setPixmapPath(XEvent *eventp,Window w,FvwmWindow *tmp_win,
+  		     unsigned long context, char *action,int* Module);
+  
++ void InfoMsg(XEvent *eventp,Window w,FvwmWindow *tmp_win,
++ 	     unsigned long context, char *action,int* Module);
+  void ProcessNewStyle(XEvent *eventp,Window w,FvwmWindow *tmp_win,unsigned long context,
+  	  char *action, int *Module);
+  void SetHiColor(XEvent *eventp,Window w,FvwmWindow *tmp_win,
+*** fvwm/parse.h	1996/09/18 17:13:37	1.1
+--- fvwm/parse.h	1996/09/18 17:13:42
+***************
+*** 73,78 ****
+--- 73,79 ----
+  #define F_COLORMAP_FOCUS        55
+  #define F_TITLESTYLE            56
+  #define F_EXEC_SETUP            57
++ #define F_INFO_MSG              58
+  /* Functions which require a target window */
+  #define F_RESIZE		100
+  #define F_RAISE			101
+*** fvwm/windows.c	1996/09/18 16:26:12	1.1
+--- fvwm/windows.c	1996/07/08 19:30:54
+***************
+*** 48,57 ****
+    int val1, val2, val1_unit,val2_unit,n;
+    char *t_hot;			/* Menu label with hotkey added */
+    char scut = '0';		/* Current short cut key */
+  
+    n = GetTwoArguments(action, &val1, &val2, &val1_unit, &val2_unit);
+  
+!   sprintf(tlabel,"CurrentDesk: %d\tGeometry",Scr.CurrentDesk);
+    mr=NewMenuRoot(tlabel,0);
+    AddToMenu(mr, tlabel, "TITLE");      
+  
+--- 48,66 ----
+    int val1, val2, val1_unit,val2_unit,n;
+    char *t_hot;			/* Menu label with hotkey added */
+    char scut = '0';		/* Current short cut key */
++   int fOnlyIcons;
+  
+    n = GetTwoArguments(action, &val1, &val2, &val1_unit, &val2_unit);
+  
+!   fOnlyIcons = (val2 < 0);
+!   if ( val2 < 0 )
+!     val2 = -val2;
+! 
+!   if (!fOnlyIcons)
+!     sprintf(tlabel,"CurrentDesk: %d\tGeometry",Scr.CurrentDesk);
+!   else
+!     sprintf(tlabel,"CurrentDesk: %d\tIcons",Scr.CurrentDesk);
+! 
+    mr=NewMenuRoot(tlabel,0);
+    AddToMenu(mr, tlabel, "TITLE");      
+  
+***************
+*** 88,93 ****
+--- 97,104 ----
+  	  if((t->Desk == next_desk)&&
+  	    (!(t->flags & WINDOWLISTSKIP)))
+  	    {
++ 	      if (fOnlyIcons && ! (t->flags & ICONIFIED))
++ 		continue;
+  	      if (++scut == ('9' + 1)) scut = 'A';	/* Next shortcut key */
+  	      if(val1%2 != 0)
+  		name = t->icon_name;
+***************
+*** 98,132 ****
+  	      
+  	      tname = safemalloc(40);
+  	      tname[0]=0;
+! 	      if(t->flags & ICONIFIED)
+! 		strcpy(tname, "(");
+! 	      sprintf(loc,"%d:",t->Desk);
+! 	      strcat(tname,loc);
+! 	      if(t->frame_x >=0)
+! 		sprintf(loc,"+%d",t->frame_x);
+! 	      else
+! 		sprintf(loc,"%d",t->frame_x);
+! 	      strcat(tname, loc);
+! 	      if(t->frame_y >=0)
+! 		sprintf(loc,"+%d",t->frame_y);
+! 	      else
+! 		sprintf(loc,"%d",t->frame_y);
+! 	      strcat(tname, loc);
+! 	      dheight = t->frame_height - t->title_height - 2*t->boundary_width;
+! 	      dwidth = t->frame_width - 2*t->boundary_width;
+! 	      
+! 	      dwidth -= t->hints.base_width;
+! 	      dheight -= t->hints.base_height;
+! 	      
+! 	      dwidth /= t->hints.width_inc;
+! 	      dheight /= t->hints.height_inc;
+  
+! 	      sprintf(loc,"x%d",dwidth);
+! 	      strcat(tname, loc);
+! 	      sprintf(loc,"x%d",dheight);
+! 	      strcat(tname, loc);
+! 	      if(t->flags & ICONIFIED)
+! 		strcat(tname, ")");
+  	      sprintf(tlabel,"RAISE_IT %ld %ld",t,t->w);
+  	      strcat(t_hot,"\t");
+  	      strcat(t_hot,tname);
+--- 109,146 ----
+  	      
+  	      tname = safemalloc(40);
+  	      tname[0]=0;
+! 	      if (!fOnlyIcons)
+! 		{
+! 		if(t->flags & ICONIFIED)
+! 		  strcpy(tname, "(");
+! 		sprintf(loc,"%d:",t->Desk);
+! 		strcat(tname,loc);
+! 		if(t->frame_x >=0)
+! 		  sprintf(loc,"+%d",t->frame_x);
+! 		else
+! 		  sprintf(loc,"%d",t->frame_x);
+! 		strcat(tname, loc);
+! 		if(t->frame_y >=0)
+! 		  sprintf(loc,"+%d",t->frame_y);
+! 		else
+! 		  sprintf(loc,"%d",t->frame_y);
+! 		strcat(tname, loc);
+! 		dheight = t->frame_height - t->title_height - 2*t->boundary_width;
+! 		dwidth = t->frame_width - 2*t->boundary_width;
+! 
+! 		dwidth -= t->hints.base_width;
+! 		dheight -= t->hints.base_height;
+! 
+! 		dwidth /= t->hints.width_inc;
+! 		dheight /= t->hints.height_inc;
+  
+! 		sprintf(loc,"x%d",dwidth);
+! 		strcat(tname, loc);
+! 		sprintf(loc,"x%d",dheight);
+! 		strcat(tname, loc);
+! 		if(t->flags & ICONIFIED)
+! 		  strcat(tname, ")");
+! 		}
+  	      sprintf(tlabel,"RAISE_IT %ld %ld",t,t->w);
+  	      strcat(t_hot,"\t");
+  	      strcat(t_hot,tname);
+*** modules/FvwmButtons/FvwmButtons.c	1996/09/18 22:37:40	1.1
+--- modules/FvwmButtons/FvwmButtons.c	1996/09/18 22:38:00
+***************
+*** 1100,1106 ****
+    gcm = GCForeground|GCBackground;
+    gcv.foreground = fore_pix;
+    gcv.background = back_pix;
+!   if(ub->font)
+      {
+        gcv.font = ub->c->font->fid;
+        gcm |= GCFont;
+--- 1100,1106 ----
+    gcm = GCForeground|GCBackground;
+    gcv.foreground = fore_pix;
+    gcv.background = back_pix;
+!   if(ub->c && ub->c->font)
+      {
+        gcv.font = ub->c->font->fid;
+        gcm |= GCFont;
+*** modules/FvwmM4/FvwmM4.c	1996/09/18 16:27:23	1.1
+--- modules/FvwmM4/FvwmM4.c	1996/09/18 16:56:06
+***************
+*** 63,68 ****
+--- 63,69 ----
+  int  m4_enable;                 /* use m4? */
+  int  m4_prefix;                 /* Do GNU m4 prefixing (-P) */
+  char m4_options[BUFSIZ];        /* Command line options to m4 */
++ char m4_outfile[BUFSIZ] = "";   /* The output filename for m4 */
+  char *m4_prog = "m4";           /* Name of the m4 program */
+  int  m4_default_quotes;         /* Use default m4 quotes */
+  char *m4_startquote = "`";         /* Left quote characters for m4 */
+***************
+*** 82,88 ****
+    char *display_name = NULL;
+    char *filename;
+    char *tmp_file, read_string[80],delete_string[80];
+!   int i,m4_debug = 0;
+  
+    m4_enable = TRUE;
+    m4_prefix = FALSE;
+--- 83,89 ----
+    char *display_name = NULL;
+    char *filename;
+    char *tmp_file, read_string[80],delete_string[80];
+!   int i;
+  
+    m4_enable = TRUE;
+    m4_prefix = FALSE;
+***************
+*** 135,140 ****
+--- 136,143 ----
+  	}
+        else if(mystrcasecmp(argv[i],"-m4opt") == 0)
+  	{
++ 	  /* leaving this in just in case-- any option starting with '-'
++ 	     will get passed on to m4 anyway */
+  	  strcat(m4_options, argv[++i]);
+  	  strcat(m4_options, " ");	    
+  	}
+***************
+*** 152,161 ****
+  	{
+  	  m4_prog = argv[++i];
+  	}
+        else if(mystrcasecmp(argv[i], "-debug") == 0)
+  	{
+! 	  m4_debug = 1;
+  	}
+        else
+  	filename = argv[i];
+      }
+--- 155,174 ----
+  	{
+  	  m4_prog = argv[++i];
+  	}
++       else if(mystrcasecmp(argv[i], "-outfile") == 0)
++ 	{
++ 	  strcpy(m4_outfile,argv[++i]);
++ 	}
+        else if(mystrcasecmp(argv[i], "-debug") == 0)
+  	{
+! 	  fprintf(stderr,"m4's -debug option is obsoleted.\n");
+  	}
++       else if (mystrncasecmp(argv[i],"-",1) == 0)
++ 	{
++ 	  /* pass on any other arguments starting with '-' to m4 */
++ 	  strcat(m4_options, argv[i]);
++ 	  strcat(m4_options, " ");	    
++         }
+        else
+  	filename = argv[i];
+      }
+***************
+*** 178,190 ****
+    sprintf(read_string,"read %s\n",tmp_file);
+    SendInfo(fd,read_string,0);
+  
+!   /* For a debugging version, we may wish to omit this part. */
+!   /* I'll let some m4 advocates clean this up */
+!   if(!m4_debug)
+!     {
+!       sprintf(delete_string,"exec rm %s\n",tmp_file);
+!       SendInfo(fd,delete_string,0);
+!     }
+  }
+  
+  
+--- 191,197 ----
+    sprintf(read_string,"read %s\n",tmp_file);
+    SendInfo(fd,read_string,0);
+  
+!   /* We don't want to remove the file, since modules need it around */
+  }
+  
+  
+***************
+*** 205,217 ****
+    /* Generate a temporary filename.  Honor the TMPDIR environment variable,
+       if set. Hope nobody deletes this file! */
+  
+!   if ((vc=getenv("TMPDIR"))) {
+!     strcpy(tmp_name, vc);
+    } else {
+!     strcpy(tmp_name, "/tmp");
+    }
+-   strcat(tmp_name, "/fvwmrcXXXXXX");
+-   mktemp(tmp_name);
+      
+    if (*tmp_name == '\0')
+    {
+--- 212,228 ----
+    /* Generate a temporary filename.  Honor the TMPDIR environment variable,
+       if set. Hope nobody deletes this file! */
+  
+!   if (strlen(m4_outfile) == 0) {
+!     if ((vc=getenv("TMPDIR"))) {
+!       strcpy(tmp_name, vc);
+!     } else {
+!       strcpy(tmp_name, "/tmp");
+!     }
+!     strcat(tmp_name, "/fvwmrcXXXXXX");
+!     mktemp(tmp_name);
+    } else {
+!     strcpy(tmp_name,m4_outfile);
+    }
+      
+    if (*tmp_name == '\0')
+    {
+***************
+*** 222,230 ****
+    /*
+    ** check to make sure it doesn't exist already, to prevent security hole
+    */
+    if ((fd = open(tmp_name, O_WRONLY|O_EXCL|O_CREAT, 0600)) < 0)
+    {
+!     perror("exclusive open for tmp_name failed in m4_defs");
+      exit(0377);
+    }
+    close(fd);
+--- 233,242 ----
+    /*
+    ** check to make sure it doesn't exist already, to prevent security hole
+    */
++   /* Why is this a security hole?  Isn't FvwmM4 run w/ user's permissions? */
+    if ((fd = open(tmp_name, O_WRONLY|O_EXCL|O_CREAT, 0600)) < 0)
+    {
+!     perror("exclusive open for output file failed in m4_defs");
+      exit(0377);
+    }
+    close(fd);

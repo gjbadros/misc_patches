@@ -1,0 +1,265 @@
+*** fvwm95-2.0.42a/fvwm/builtins.c	Sat Jul  6 09:06:28 1996
+--- /opt/fvwm95-2.0.42a/fvwm/builtins.c	Wed Sep 18 17:38:15 1996
+***************
+*** 1088,1093 ****
+--- 1088,1100 ----
+    free(tmp);
+  }
+  
++ void InfoMsg(XEvent *eventp,Window w,FvwmWindow *tmp_win,
++ 	     unsigned long context, char *action, int* Module)
++ {
++     action[strlen(action)-1] = 0; /* chop off \n */
++     fvwm_msg(INFO,"Parser",action);
++ }
++ 
+  #ifdef FVWM_MODULEDIR
+  char *ModulePath = FVWM_MODULEDIR;
+  #else
+*** fvwm95-2.0.42a/fvwm/functions.c	Sat Jul  6 09:10:04 1996
+--- /opt/fvwm95-2.0.42a/fvwm/functions.c	Wed Sep 18 17:38:15 1996
+***************
+*** 61,66 ****
+--- 61,67 ----
+    {"Iconify",      iconify_function, F_ICONIFY,             FUNC_NEEDS_WINDOW},
+    {"IconFont",     LoadIconFont,     F_ICONFONT,            FUNC_NO_WINDOW},
+    {"IconPath",     setIconPath,      F_ICON_PATH,           FUNC_NO_WINDOW},
++   {"InfoMsg",      InfoMsg,          F_INFO_MSG,            FUNC_NO_WINDOW},
+    {"Key",          ParseKeyEntry,    F_KEY,                 FUNC_NO_WINDOW},
+    {"Lower",        lower_function,   F_LOWER,               FUNC_NEEDS_WINDOW},
+    {"Maximize",     Maximize,         F_MAXIMIZE,            FUNC_NEEDS_WINDOW},
+*** fvwm95-2.0.42a/fvwm/windows.c	Sat Jul  6 09:14:23 1996
+--- /opt/fvwm95-2.0.42a/fvwm/windows.c	Wed Sep 18 17:38:15 1996
+***************
+*** 48,53 ****
+--- 48,54 ----
+    char *t_hot;			/* Menu label with hotkey added */
+    char scut = '0';		/* Current short cut key */
+  
++   int fOnlyIcons = False;
+    int show_geometry = False;
+    int desk_mode = 0;
+    long desk_num = 0;
+***************
+*** 62,67 ****
+--- 63,69 ----
+      else if (mystrcasecmp(tmp, "UseWindowNames") == 0) use_icon_name = False;
+      else if (mystrcasecmp(tmp, "ShowAllDesks") == 0) desk_mode = 0;
+      else if (mystrcasecmp(tmp, "ShowCurrentDesk") == 0) desk_mode = 2;
++     else if (mystrcasecmp(tmp, "ShowOnlyIcons") == 0) fOnlyIcons = True;
+      else if (mystrcasecmp(tmp, "ShowDesk") == 0)
+        {
+        int n = 0, junk;
+***************
+*** 76,83 ****
+      action = GetNextToken(action, &tmp);
+      }
+  
+!   sprintf(tlabel,"CurrentDesk: %d%s",Scr.CurrentDesk,
+!           show_geometry ? "\tGeometry" : "");
+  
+    mr = NewMenuRoot(tlabel,0);
+    AddToMenu(mr, tlabel, "TITLE");      
+--- 78,86 ----
+      action = GetNextToken(action, &tmp);
+      }
+  
+!   sprintf(tlabel,"CurrentDesk: %d%s%s",Scr.CurrentDesk,
+!           show_geometry ? "\tGeometry" : "",
+! 	  fOnlyIcons ? "  (Only Icons)" : "");
+  
+    mr = NewMenuRoot(tlabel,0);
+    AddToMenu(mr, tlabel, "TITLE");      
+***************
+*** 115,120 ****
+--- 118,125 ----
+        {
+        if ((t->Desk == next_desk) && (!(t->flags & WINDOWLISTSKIP)))
+          {
++ 	if (fOnlyIcons && ! (t->flags & ICONIFIED))
++ 	  continue;
+  	if (++scut == ('9' + 1)) scut = 'A';	/* Next shortcut key */
+  
+  	if(use_icon_name)
+*** fvwm95-2.0.42a/modules/FvwmButtons/FvwmButtons.c	Sat Jul  6 09:46:29 1996
+--- /opt/fvwm95-2.0.42a/modules/FvwmButtons/FvwmButtons.c	Wed Sep 18 17:38:16 1996
+***************
+*** 1100,1106 ****
+    gcm = GCForeground|GCBackground;
+    gcv.foreground = fore_pix;
+    gcv.background = back_pix;
+!   if(ub->font)
+      {
+        gcv.font = ub->c->font->fid;
+        gcm |= GCFont;
+--- 1100,1106 ----
+    gcm = GCForeground|GCBackground;
+    gcv.foreground = fore_pix;
+    gcv.background = back_pix;
+!   if(ub->c && ub->c->font)
+      {
+        gcv.font = ub->c->font->fid;
+        gcm |= GCFont;
+*** fvwm95-2.0.42a/modules/FvwmM4/FvwmM4.c	Sat Jul  6 09:49:22 1996
+--- /opt/fvwm95-2.0.42a/modules/FvwmM4/FvwmM4.c	Wed Sep 18 17:45:42 1996
+***************
+*** 63,68 ****
+--- 63,69 ----
+  int  m4_enable;                 /* use m4? */
+  int  m4_prefix;                 /* Do GNU m4 prefixing (-P) */
+  char m4_options[BUFSIZ];        /* Command line options to m4 */
++ char m4_outfile[BUFSIZ] = "";   /* The output filename for m4 */
+  char *m4_prog = "m4";           /* Name of the m4 program */
+  int  m4_default_quotes;         /* Use default m4 quotes */
+  char *m4_startquote = "`";         /* Left quote characters for m4 */
+***************
+*** 82,88 ****
+    char *display_name = NULL;
+    char *filename;
+    char *tmp_file, read_string[80],delete_string[80];
+!   int i,m4_debug = 0;
+  
+    m4_enable = TRUE;
+    m4_prefix = FALSE;
+--- 83,89 ----
+    char *display_name = NULL;
+    char *filename;
+    char *tmp_file, read_string[80],delete_string[80];
+!   int i;
+  
+    m4_enable = TRUE;
+    m4_prefix = FALSE;
+***************
+*** 135,140 ****
+--- 136,143 ----
+  	}
+        else if(mystrcasecmp(argv[i],"-m4opt") == 0)
+  	{
++ 	  /* leaving this in just in case-- any option starting with '-'
++ 	     will get passed on to m4 anyway */
+  	  strcat(m4_options, argv[++i]);
+  	  strcat(m4_options, " ");	    
+  	}
+***************
+*** 152,161 ****
+  	{
+  	  m4_prog = argv[++i];
+  	}
+        else if(mystrcasecmp(argv[i], "-debug") == 0)
+  	{
+! 	  m4_debug = 1;
+  	}
+        else
+  	filename = argv[i];
+      }
+--- 155,174 ----
+  	{
+  	  m4_prog = argv[++i];
+  	}
++       else if(mystrcasecmp(argv[i], "-outfile") == 0)
++ 	{
++ 	  strcpy(m4_outfile,argv[++i]);
++ 	}
+        else if(mystrcasecmp(argv[i], "-debug") == 0)
+  	{
+! 	  fprintf(stderr,"m4's -debug option is obsoleted.\n");
+  	}
++       else if (mystrncasecmp(argv[i],"-",1) == 0)
++ 	{
++ 	  /* pass on any other arguments starting with '-' to m4 */
++ 	  strcat(m4_options, argv[i]);
++ 	  strcat(m4_options, " ");	    
++         }
+        else
+  	filename = argv[i];
+      }
+***************
+*** 178,190 ****
+    sprintf(read_string,"read %s\n",tmp_file);
+    SendInfo(fd,read_string,0);
+  
+!   /* For a debugging version, we may wish to omit this part. */
+!   /* I'll let some m4 advocates clean this up */
+!   if(!m4_debug)
+!     {
+!       sprintf(delete_string,"exec rm %s\n",tmp_file);
+!       SendInfo(fd,delete_string,0);
+!     }
+  }
+  
+  
+--- 191,197 ----
+    sprintf(read_string,"read %s\n",tmp_file);
+    SendInfo(fd,read_string,0);
+  
+!   /* We don't want to remove the file, since modules need it around */
+  }
+  
+  
+***************
+*** 204,216 ****
+      /* Generate a temporary filename.  Honor the TMPDIR environment variable,
+         if set. Hope nobody deletes this file! */
+  
+!     if ((vc=getenv("TMPDIR"))) {
+!       strcpy(tmp_name, vc);
+!     } else {
+!       strcpy(tmp_name, "/tmp");
+!     }
+!     strcat(tmp_name, "/fvwmrcXXXXXX");
+!     mktemp(tmp_name);
+      
+    if (*tmp_name == '\0')
+      {
+--- 211,227 ----
+      /* Generate a temporary filename.  Honor the TMPDIR environment variable,
+         if set. Hope nobody deletes this file! */
+  
+!    if (strlen(m4_outfile) == 0) {
+!      if ((vc=getenv("TMPDIR"))) {
+!        strcpy(tmp_name, vc);
+!      } else {
+!        strcpy(tmp_name, "/tmp");
+!      }
+!      strcat(tmp_name, "/fvwmrcXXXXXX");
+!      mktemp(tmp_name);
+!    } else {
+!      strcpy(tmp_name,m4_outfile);
+!    }
+      
+    if (*tmp_name == '\0')
+      {
+*** fvwm95-2.0.42a/fvwm/misc.h	Sat Jul  6 09:38:56 1996
+--- /opt/fvwm95-2.0.42a/fvwm/misc.h	Wed Sep 18 17:38:15 1996
+***************
+*** 438,443 ****
+--- 438,445 ----
+  void setPixmapPath(XEvent *eventp,Window w,FvwmWindow *tmp_win,
+  		     unsigned long context, char *action,int* Module);
+  
++ void InfoMsg(XEvent *eventp,Window w,FvwmWindow *tmp_win,
++ 	     unsigned long context, char *action,int* Module);
+  void ProcessNewStyle(XEvent *eventp,Window w,FvwmWindow *tmp_win,unsigned long context,
+  	  char *action, int *Module);
+  void SetHiColor(XEvent *eventp,Window w,FvwmWindow *tmp_win,
+*** fvwm95-2.0.42a/fvwm/parse.h	Sun Jun 16 07:53:38 1996
+--- /opt/fvwm95-2.0.42a/fvwm/parse.h	Wed Sep 18 17:41:17 1996
+***************
+*** 75,80 ****
+--- 75,81 ----
+  #define F_BORDERCOLOR		57
+  #define F_STICKYCOLOR		58
+  #define F_EXEC_SETUP            59
++ #define F_INFO_MSG              60
+  /* Functions which require a target window */
+  #define F_RESIZE		100
+  #define F_RAISE			101
+*** fvwm95-2.0.42a/include/fvwm/version.h	Mon Jun 24 11:08:59 1996
+--- /opt/fvwm95-2.0.42a/include/fvwm/version.h	Wed Sep 18 17:46:37 1996
+***************
+*** 1,2 ****
+! #define VERSION "2.0.42a"
+  
+--- 1,2 ----
+! #define VERSION "2.0.42a-gjb"
+  

@@ -1,0 +1,193 @@
+
+From philipa@parallax.co.uk Thu Sep 12 11:44:48 1996
+Date: Thu, 12 Sep 1996 14:39:36 +0100
+From: Philip Aston <philipa@parallax.co.uk>
+To: xbae@bain.oz.au
+Subject: Removing flicker in refresh...
+Resent-Date: Thu, 12 Sep 1996 23:44:44 +1000 (EST)
+Resent-From: xbae@bain.oz.au
+
+
+Andrew,
+
+Here's a patch which, when used with disable/enableRedisplay, cures
+99% of our matrix flicker problems.
+
+The flickering effect is particularly noticeable if you've got the grid
+type set to Column or Row shadows and you do a lot of updates. The
+shadows get repainted for every exposure, not quite the desired effect.
+
+The change to Public.c discards all the pending exposure events before
+generating one for the whole widget.
+
+There's a subtlety here, the scroll managers need to be reset in case
+we discard a scroll exposure event and leave them in the wrong
+state. This caused me quite a headache earlier on today.
+
+The changes to Methods.c call XbaeMatrixRefresh instead of generating
+an exposure directly. (Maybe XbaeMatrixRefresh should be split into
+internal and public versions?)
+
+I think the Clip Widget has other XClearArea's that this could be
+applied to as well.
+
+- Phil
+
+
+
+
+
+*** /home/XbaeMatrix/Public.c  Wed Jul 31 09:28:08 1996
+--- .//Public.c Thu Sep 12 11:52:45 1996
+***************
+*** 607,612 ****
+--- 607,636 ----
+        (0 == mw->matrix.disable_redisplay))
+      {
+        /*
++        * We're about to flush scoll exposure events, so reset the scroll managers.
++        */
++       xbaeSmDestroyScrollMgr(mw->matrix.matrix_scroll_mgr);
++       xbaeSmDestroyScrollMgr(mw->matrix.clip_scroll_mgr);
++ 
++       mw->matrix.matrix_scroll_mgr = xbaeSmCreateScrollMgr();
++       mw->matrix.clip_scroll_mgr = xbaeSmCreateScrollMgr();
++ 
++         /*
++        * Don't respond to exposures.
++        */
++       mw->matrix.disable_redisplay = 1;
++ 
++       /*
++        * Flush pending expose events.
++        */
++       XmUpdateDisplay(mw);
++ 
++       /*
++        * Respond to exposures.
++        */
++       mw->matrix.disable_redisplay = 0;
++ 
++       /*
+         * Generate expose events on Matrix and Clip to force the redrawing.
+         */
+        XClearArea(XtDisplay(mw), XtWindow(mw),
+
+
+
+
+*** /home/XbaeMatrix/Methods.c Tue Aug 20 22:00:21 1996
+--- .//Methods.c        Thu Sep 12 08:17:40 1996
+***************
+*** 2577,2594 ****
+      (*((XbaeMatrixWidgetClass) XtClass(mw))->matrix_class.cancel_edit)
+        (mw, True);
+  
+!     if (XtIsRealized((Widget)mw))
+!     {
+!       /*
+!        * Generate expose events on Matrix and Clip to force the
+!        * new rows to be drawn.
+!        */
+!       XClearArea(XtDisplay(mw), XtWindow(mw),
+!                  0, 0,
+!                  0 /*Full Width*/, 0 /*Full Height*/,
+!                  True);
+!       XbaeClipRedraw(ClipChild(mw));
+!     }
+  }
+  
+  /*
+--- 2577,2583 ----
+      (*((XbaeMatrixWidgetClass) XtClass(mw))->matrix_class.cancel_edit)
+        (mw, True);
+  
+!     XbaeMatrixRefresh((Widget)mw);
+  }
+  
+  /*
+***************
+*** 2663,2680 ****
+      (*((XbaeMatrixWidgetClass) XtClass(mw))->matrix_class.cancel_edit)
+        (mw, True);
+  
+!     if (XtIsRealized((Widget)mw))
+!     {
+!       /*
+!        * Generate expose events on Matrix and Clip to force the
+!        * rows to be redrawn.
+!        */
+!       XClearArea(XtDisplay(mw), XtWindow(mw),
+!                  0, 0,
+!                  0 /*Full Width*/, 0 /*Full Height*/,
+!                  True);
+!       XbaeClipRedraw(ClipChild(mw));
+!     }
+  }
+  
+  /*
+--- 2652,2658 ----
+      (*((XbaeMatrixWidgetClass) XtClass(mw))->matrix_class.cancel_edit)
+        (mw, True);
+  
+!     XbaeMatrixRefresh((Widget)mw);
+  }
+  
+  /*
+***************
+*** 2752,2769 ****
+      (*((XbaeMatrixWidgetClass) XtClass(mw))->matrix_class.cancel_edit)
+        (mw, True);
+      
+!     if (XtIsRealized((Widget)mw))
+!     {
+!       /*
+!        * Generate expose events on Matrix and Clip to force the
+!        * new columns to be drawn.
+!        */
+!       XClearArea(XtDisplay(mw), XtWindow(mw),
+!                  0, 0,
+!                  0 /*Full Width*/, 0 /*Full Height*/,
+!                  True);
+!       XbaeClipRedraw(ClipChild(mw));
+!     }
+  }
+  
+  /*
+--- 2730,2736 ----
+      (*((XbaeMatrixWidgetClass) XtClass(mw))->matrix_class.cancel_edit)
+        (mw, True);
+      
+!     XbaeMatrixRefresh((Widget)mw);
+  }
+  
+  /*
+***************
+*** 2825,2842 ****
+      (*((XbaeMatrixWidgetClass) XtClass(mw))->matrix_class.cancel_edit)
+        (mw, True);
+  
+!     if (XtIsRealized((Widget)mw))
+!     {
+!       /*
+!        * Generate expose events on Matrix and Clip to force the
+!        * columns to be redrawn.
+!        */
+!       XClearArea(XtDisplay(mw), XtWindow(mw),
+!                  0, 0,
+!                  0 /*Full Width*/, 0 /*Full Height*/,
+!                  True);
+!       XbaeClipRedraw(ClipChild(mw));
+!     }
+  }
+  
+  /*
+--- 2792,2798 ----
+      (*((XbaeMatrixWidgetClass) XtClass(mw))->matrix_class.cancel_edit)
+        (mw, True);
+  
+!     XbaeMatrixRefresh((Widget)mw);
+  }
+  
+  /*
+

@@ -1,0 +1,34 @@
+Common problem--  Fvwm2.0.42 used -f option to start FvwmM4, and now
+it uses -cmd option for version 2.0.43 and newer.  The man page was not
+updated properly, and my TNL configuration was written for 2.0.42.
+
+You should apply this patch to your .xinitrc:
+
+
+*** Xinitrc	Tue Sep 24 08:07:02 1996
+--- Xinitrc.new	Tue Sep 24 08:07:52 1996
+***************
+*** 40,46 ****
+  # You may want to tail -f .FVWM{2,95}-errors as you're starting fvwm
+  # as it will contain useful diagnostics
+  env > /tmp/Xrootenv.0
+! #exec fvwm95 -f "FvwmM4 -debug .fvwm2rc95.m4" -display :0 > .FVWM95-errors 2>&1
+! exec fvwm2 -f "FvwmM4 -debug .fvwm2rc.m4" -display :0 > .FVWM2-errors 2>&1
+  rm -f /tmp/fvwmrc*
+  rm /tmp/Xrootenv.0
+--- 40,46 ----
+  # You may want to tail -f .FVWM{2,95}-errors as you're starting fvwm
+  # as it will contain useful diagnostics
+  env > /tmp/Xrootenv.0
+! #exec fvwm95 -cmd "FvwmM4 -debug .fvwm2rc95.m4" -display :0 > .FVWM95-errors 2>&1
+! exec fvwm2 -cmd "FvwmM4 -debug .fvwm2rc.m4" -display :0 > .FVWM2-errors 2>&1
+  rm -f /tmp/fvwmrc*
+  rm /tmp/Xrootenv.0
+
+
+Good luck, and let me know what you think!
+
+
+Greg J. Badros
+gjb@cs.duke.edu
+http://www.cs.duke.edu/~gjb

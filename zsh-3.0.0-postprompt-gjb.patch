@@ -1,0 +1,193 @@
+*** globals.h	1996/08/19 02:06:53	1.1
+--- globals.h	1996/08/20 01:03:30	1.2
+***************
+*** 331,336 ****
+--- 331,337 ----
+  EXTERN char *prompt4;
+  EXTERN char *rprompt;		/* $RPROMPT    */
+  EXTERN char *sprompt;
++ EXTERN char *postprompt;
+  
+  EXTERN char *wordchars;
+  EXTERN char *rstring, *Rstring;
+*** hashtable.h	1996/08/19 23:49:13	1.1
+--- hashtable.h	1996/08/20 01:02:15	1.2
+***************
+*** 156,161 ****
+--- 156,162 ----
+  IPDEF7("PS4", &prompt4),
+  IPDEF7("RPS1", &rprompt),
+  IPDEF7("SPROMPT", &sprompt),
++ IPDEF7("POSTPROMPT", &postprompt),
+  IPDEF7("0", &argzero),
+  
+  #define IPDEF8(A,B,C) {NULL,A,PM_SCALAR|PM_SPECIAL,NULL,IFN(colonarrsetfn),IFN(colonarrgetfn),0,(void *)B,NULL,C,NULL,0}
+*** init.c	1996/08/18 20:27:14	1.1
+--- init.c	1996/08/20 01:03:45	1.2
+***************
+*** 515,520 ****
+--- 515,521 ----
+  	prompt3 = ztrdup("");
+  	prompt4 = ztrdup("");
+      }
++     postprompt = ztrdup("");
+      sprompt = ztrdup("zsh: correct '%R' to '%r' [nyae]? ");
+  
+      if (!(ttystrname = ztrdup(ttyname(SHTTY))))
+*** signals.c	1996/08/18 20:33:52	1.1
+--- signals.c	1996/08/20 01:01:55	1.2
+***************
+*** 309,314 ****
+--- 309,315 ----
+  
+      sigfillset(&set);
+      sigdelset(&set, sig);
++     sigdelset(&set, SIGALRM);
+      sigdelset(&set, SIGHUP);  /* still don't know why we add this? */
+      if (sig2)
+          sigdelset(&set, sig2);
+***************
+*** 319,324 ****
+--- 320,326 ----
+  
+      sigfillset(&set);
+      sigdelset(&set, sig);
++     sigdelset(&set, SIGALRM);
+      if (sig2)
+        sigdelset(&set, sig2);
+      ret = sigpause(set);
+***************
+*** 538,549 ****
+          break;
+  
+      case SIGALRM:
+!         if (sigtrapped[SIGALRM]) {
+  	    int tmout;
+!             dotrap(SIGALRM);
+!             if ((tmout = getiparam("TMOUT")))
+!                 alarm(tmout);           /* reset the alarm */
+!         } else {
+  	    int idle = ttyidlegetfn(NULL);
+  	    int tmout = getiparam("TMOUT");
+  	    if (idle >= 0 && idle < tmout)
+--- 540,559 ----
+          break;
+  
+      case SIGALRM:
+! 	if (!zleactive) {
+! 	    /* One possibility is to do the TRAPALRM fn -- however,
+! 	       I choose to save that for the TMOUT mechanism-- a new prompt
+! 	       is all we really need, methinks */
+! 	    /*dotrap(SIGALRM);*/
+! 	    putpostprompt();
+! 	    alarm(0);
+! 	    }
+! 	else if (sigtrapped[SIGALRM]) {
+  	    int tmout;
+! 	    dotrap(SIGALRM);
+! 	    if ((tmout = getiparam("TMOUT")))
+! 		alarm(tmout);		/* reset the alarm */
+! 	} else {
+  	    int idle = ttyidlegetfn(NULL);
+  	    int tmout = getiparam("TMOUT");
+  	    if (idle >= 0 && idle < tmout)
+*** version.h	1996/08/18 20:42:01	1.1
+--- version.h	1996/08/20 01:04:06	1.2
+***************
+*** 1 ****
+! #define ZSH_VERSION "3.0.0"
+--- 1 ----
+! #define ZSH_VERSION "3.0.0-gjb"
+*** zle_main.c	1996/08/18 19:57:24	1.1
+--- zle_main.c	1996/08/20 00:59:48	1.2
+***************
+*** 342,347 ****
+--- 342,363 ----
+  
+  /* Read a line.  It is returned metafied. */
+  
++ #define cchMaxInZleLine 64
++ char szLastZleLine[cchMaxInZleLine];
++ 
++ /**/
++ void
++ putpostprompt(void)
++ {
++     int plen = 0;
++     char *szPostPrompt = putprompt(postprompt,&plen,NULL,0);
++     /*    fprintf(stderr,"SIGALRM case. szPostPrompt = %sn",szPostPrompt); 
++     fflush(stderr); */
++     fwrite(szPostPrompt,sizeof(char),plen,stderr);
++     fflush(stderr);
++     free(szPostPrompt);
++ }
++ 
+  /**/
+  unsigned char *
+  zleread(char *lp, char *rp)
+***************
+*** 417,424 ****
+  	initundo();
+  	if (isset(PROMPTCR))
+  	    putc('\r', shout);
+! 	if (tmout)
+! 	    alarm(tmout);
+  	genprompts();
+  	zleactive = 1;
+  	resetneeded = 1;
+--- 433,439 ----
+  	initundo();
+  	if (isset(PROMPTCR))
+  	    putc('\r', shout);
+! 	alarm(tmout);
+  	genprompts();
+  	zleactive = 1;
+  	resetneeded = 1;
+***************
+*** 489,496 ****
+  	statusline = NULL;
+  	invalidatelist();
+  	trashzle();
+  	zleactive = 0;
+! 	alarm(0);
+      } LASTALLOC;
+      zsfree(curhistline);
+      free(lastline);		/* freeundo */
+--- 504,515 ----
+  	statusline = NULL;
+  	invalidatelist();
+  	trashzle();
++ 	strncpy(szLastZleLine, line, cchMaxInZleLine);
+  	zleactive = 0;
+! 	if ((tmout = getiparam("PPTMOUT")) < 0)
+! 	    putpostprompt();
+! 	else /* if tmout == 0, we want to remove the alarm, so just call alarm */
+! 	    alarm(tmout);
+      } LASTALLOC;
+      zsfree(curhistline);
+      free(lastline);		/* freeundo */
+*** zle_misc.c	1996/08/19 02:04:38	1.1
+--- zle_misc.c	1996/08/20 01:00:32	1.2
+***************
+*** 805,810 ****
+--- 805,812 ----
+  static char *buf, *bp1, *bl0, *fm, *pmpt;
+  static int bracepos, bufspc;
+  
++ extern char szLastZleLine[];
++ 
+  /**/
+  char *
+  putprompt(char *fmin, int *lenp, int *wp, int cnt)
+***************
+*** 1038,1043 ****
+--- 1040,1048 ----
+  		break;
+  	    case 'M':
+  		stradd(hostnam);
++ 		break;
++ 	    case 'H':
++ 		stradd(szLastZleLine);
+  		break;
+  	    case 'm':
+  		if (!arg)

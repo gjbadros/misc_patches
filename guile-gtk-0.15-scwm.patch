@@ -1,0 +1,31 @@
+--- gtk-support.c.orig	Thu Apr  1 07:47:33 1999
++++ gtk-support.c	Wed Mar 31 19:40:17 1999
+@@ -25,6 +25,15 @@
+ 
+ 
+ 
++extern guint32 gdk_leader_window;
++
++guint32
++gdk_lead_window()
++{
++  return (guint32) gdk_leader_window;
++}
++
++
+ GdkColor *
+ gdk_color_intern (GdkColor *color)
+ {
+--- gdk-1.2.defs.orig	Thu Apr  1 07:46:51 1999
++++ gdk-1.2.defs	Thu Apr  1 07:50:14 1999
+@@ -490,6 +490,10 @@
+   GdkVisibilityState
+   ((GdkEvent event)))
+ 
++(define-func gdk_lead_window
++  uint
++  ())
++
+ (define-func gdk_event_time
+   uint
+   ((GdkEvent event)))

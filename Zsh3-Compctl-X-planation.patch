@@ -1,0 +1,92 @@
+
+From hzoli@cs.elte.hu Fri Aug 23 14:07:41 1996
+Date: Fri, 23 Aug 1996 19:57:27 +0200 (MET DST)
+From: Zoltan Hidvegi <hzoli@cs.elte.hu>
+To: "Greg J. Badros" <gjb@moa.cs.duke.edu>
+Cc: zsh-workers@math.gatech.edu
+Subject: Re: Semantics of compctl -X
+
+> It seems that the behaviour of -X "Explanation" compctl flag has changed
+> since 2.5.03.  It used to work like this:
+> 
+> compctl -X "Testing" howdy
+> howdy <tab>
+> 
+> - would give :  "Testing"
+> 
+> Now, in Zsh3, however, it appears to *not* echo anything unless it's got
+> something to complete.
+
+It broke long ago when Zefram reorganized zle_tricky a bit.  It is
+surprising that nobody noticed this since than.  The patch below should fix
+it.  I'm not 100% confident that this is the right way to fix it so any
+better solutions are welcome.
+
+Zoltan
+
+
+*** Src/zle_tricky.c	1996/08/11 19:15:35	2.72
+--- Src/zle_tricky.c	1996/08/23 17:40:00
+***************
+*** 2136,2145 ****
+  		strcpy((char *)line + wb, (char *)line + we);
+  		we = cs = wb;
+  	    }
+! 	    if (nmatches>1)
+  		/* There are more than one match. */
+  		do_ambiguous();
+! 	    else {
+  		/* Only one match. */
+  		do_single(amatches[0]);
+  		invalidatelist();
+--- 2136,2145 ----
+  		strcpy((char *)line + wb, (char *)line + we);
+  		we = cs = wb;
+  	    }
+! 	    if (nmatches > 1)
+  		/* There are more than one match. */
+  		do_ambiguous();
+! 	    else if (nmatches == 1) {
+  		/* Only one match. */
+  		do_single(amatches[0]);
+  		invalidatelist();
+***************
+*** 2147,2155 ****
+  	}
+  
+  	/* Print the explanation string if needed. */
+! 	if (!showinglist && expl && nmatches!=1) {
+  	    int up;
+  
+  	    trashzle();
+  
+  	    clearflag = (isset(USEZLE) && termok &&
+--- 2147,2156 ----
+  	}
+  
+  	/* Print the explanation string if needed. */
+! 	if (!showinglist && expl && !nmatches) {
+  	    int up;
+  
++ 	    feep();
+  	    trashzle();
+  
+  	    clearflag = (isset(USEZLE) && termok &&
+***************
+*** 2953,2959 ****
+      ccsuffix = cc->suffix;
+  
+      validlist = 1;
+!     if(nmatches && !errflag)
+  	return 0;
+  
+      if ((isf || cc->xor) && !parampre) {
+--- 2954,2960 ----
+      ccsuffix = cc->suffix;
+  
+      validlist = 1;
+!     if ((nmatches || expl) && !errflag)
+  	return 0;
+  
+      if ((isf || cc->xor) && !parampre) {
+

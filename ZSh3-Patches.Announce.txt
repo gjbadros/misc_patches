@@ -1,0 +1,132 @@
+I have spent some time over the last several days delving into zshell (I
+had jury duty! :-) ) and have made some exciting (to me, anyway)
+improvements that I'd like to get some feedback on, and would love to
+see in a future version of Zshell.  The patches are attached.  The
+enhancements they provide have been tested both on Linux-2.0.12 (RedHat
+3.0.3 w/ upgraded kernel) and on Sun Solaris 2.4 (where I need a
+-ltermcap to build properly-- configure problem??)  Briefly, the
+enhancements are post-prompt printing, partial word "CamelCaps" movement
+and deletion in zle, rudimentary dynamic abbreviation (like emacs), and
+color-ls like colorized filename completion listings.  Detailed
+descriptions follow.
+
+Please note! ALL USUAL DISCLAIMERS APPLY! I am not responsible for any
+problems that this causes you, I hope that it is useful but make no
+claims whatsoever about its functioning or correctness.  You may
+redistribute unmodified, modify it for personal use (please send me a
+copy).  I'd be happy to see the patches become part of version 3.1.
+
+===============================================
+o A postprompt mechanism which allows the user to customize a "prompt"
+string (print -P format) to be output to the terminal after the most
+recent foreground process has been executing for a given number of
+seconds.  (An improvement over a similar patch with limited distribution
+for zsh-2.5.03).  My main goal for this feature is to make Zshell output an
+xterm control sequence to change the window/icon name based on the
+current foreground process, totally automatically.  For example:
+
+part of my .zshrc
+----------------------
+...
+# InteractiveComments are nice to add an extra note to a command line
+setopt interactivecomments
+setopt promptsubst
+
+# The escape sequences only work in xterm or color_xterm's, so
+# guard for them
+if [ "$TERM" == "xterm" -o "$TERM" == "color_xterm" ]; then
+  # Output an initial string to set the window title to the hostname
+  # followed by a # if you're root
+  print -nP '%{\e]0;%m%(#.#.)\C-g%}'
+  # %H is a new prompt character meaning the last zle line
+  # I use cmd substitution w/ print here so that
+  # my escape characters are cut & pastable
+  POSTPROMPT=`print -n '%{\e]0;%m%(#.#.) %H\C-g%}'`
+  # We only commands that run for >= 4 seconds will output the postprompt
+  # This eliminates trivial commands like "ls", etc.
+  PPTMOUT=4
+fi
+-----------------------
+
+As you can see above, the new mechanism is controlled by:
+
+$POSTPROMPT variable, set to the prompt to print
+$PPTMOUT variable, set to the number of seconds to wait before
+  outputting the post-prompt.  Or set to 0 for no post-prompt (the
+  default) or set to -1 for no waiting (output it right away).
+%H as a new prompt substitution character, to mean the last zle line.
+
+
+Try this feature out with "sleep 6", or just man zshall, then wait four
+seconds-- your window title should change, making that xterm with the
+man page easier to find in your window manager's window list (I use
+FVWM2, and this works great!)
+
+===============================================
+o Simple new ZLE functions, {for,back}ward-word-part and 
+  {for,back}ward-delete-word-part.  These move through CamelCaps
+  occurring in the zle line.  I have these bound like so:
+
+bindkey "\eOD" backward-word-part
+bindkey "\eOC" forward-word-part
+bindkey "^\\" backward-delete-word-part
+
+  Where my .Xdefaults overrides the C-S-H keystroke to give \eOD, and
+the C-S-L keystroke to give \eOC.  They should work with numeric args,
+etc. and may not be useful to everyone, but they give some added
+flexibility, and make zle capabilities more like emacs.
+===============================================
+o Rudimentary (read "poor") dabbrev-complete ZLE function.  I'd love to
+  see someone who knows about zsh's completion mechanism do this right.
+****It is a feature of tcsh that zsh lacks******! Currently it doesn't
+  complete back on the currently line, and doesn't cycle choices
+properly, but since I know I'm doing this wrong I didn't want to spend
+more time on it.  By default, bound to M-/, but must compile with
+-DSIMPLE_DABBREV_GJB to enable it.  (See bindkey -me and your terminal
+settings to see if your meta key will work).
+===============================================
+and last but certainly not least!
+
+o Color-ls like colorized filename completion listings.  Analogous to
+the LIST_TYPES option, my new LIST_COLORS option turns this feature on.
+It uses ZLS_COLORS, ZLS_COLOURS, LS_COLORS, LS_COLOURS [first found, in
+that order] to set the colors options.  See dircolors(1) from the
+color-ls patch, available on sunsite and elsewhere.  If you don't have
+dircolors and the color-ls patch to ls, get them, but here is my
+LS_COLORS setting so you can use it with zsh:
+
+export LS_COLORS="no=00:fi=00:di=01;34:ln=01;36:pi=40;33:so=01;35:\
+bd=40;33;01:cd=40;33;01:or=01;05;31;40:ex=32;40:\
+*.cmd=01;32:*.exe=01;32:*.com=01;32:*.btm=01;32:*.bat=01;32:\
+*.tar=00;31:*.tgz=01;31:*.arj=01;31:*.taz=01;31:*.lzh=01;31:\
+*.zip=01;31:*.z=01;31:*.Z=01;31:*.gz=01;31:*.rpm=34:*.jpg=01;35:\
+*.gif=01;35:*.bmp=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:"
+
+Be sure to only set the listcolors option when running color_xterm, or
+another terminal type that supports ansi color sequences (linux console
+is fine, too).  Otherwise you'll get some bizarre escape sequences
+showing up.
+
+I use:
+unsetopt MENU_COMPLETE
+setopt AUTO_LIST
+setopt AUTO_MENU
+setenv LISTMAX 0
+
+Try ls /<TAB> or just ls <TAB> then type the beginning of a directory
+name, complete it, and hit <TAB> again to list that directory.
+==================================================
+
+Please give me feedback about what you like and what you don't like.
+Also, if anyone is going to pick up the dabbrevcomplete function, I'd
+love to drop it from my patches.  Alternatively, hints and/or pointers
+are appreciated.
+
+Attached are separate patches, one for the post prompt feature, and a
+second for everything else.  I know these work when applied in that
+order. Please let me know if something doesn't work for you, with the
+usual detailed description.  I can't promise to fix it, but I will when
+it's important and time permits.  You may also be able to find these
+patches on my web site, http://www.cs.duke.edu/~gjb, in a couple days.
+
+Greg

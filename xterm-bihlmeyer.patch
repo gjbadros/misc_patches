@@ -1,0 +1,63 @@
+--Multipart_Mon_Jul__6_09:42:45_1998-1
+Content-Type: text/plain; charset=US-ASCII
+
+diff -u xterm.orig/main.c xterm/main.c
+--- xterm.orig/main.c	Thu Oct  3 10:50:34 1996
++++ xterm/main.c	Sat Mar 21 23:08:11 1998
+@@ -1056,6 +1056,7 @@
+ };
+ 
+ Atom wm_delete_window;
++Atom wm_attention;
+ extern fd_set Select_mask;
+ extern fd_set X_mask;
+ extern fd_set pty_mask;
+@@ -2238,6 +2239,8 @@
+ 		  }
+ #endif /* PUCC_PTYD */
+ 	}
++
++	wm_attention = XInternAtom(XtDisplay(toplevel), "WM_ATTENTION", False);
+ 
+ 	/* avoid double MapWindow requests */
+ 	XtSetMappedWhenManaged( screen->TekEmu ? XtParent(tekWidget) :
+diff -u xterm.orig/misc.c xterm/misc.c
+--- xterm.orig/misc.c	Sun Sep 22 07:16:10 1996
++++ xterm/misc.c	Sat Mar 21 23:09:25 1998
+@@ -370,6 +370,7 @@
+ }
+ 
+ static long lastBellTime;	/* in milliseconds */
++extern Atom wm_attention;
+ 
+ void
+ Bell(which,percent)
+@@ -406,6 +407,9 @@
+ #else
+ 	XBell(screen->display, percent);
+ #endif
++
++    XChangeProperty(XtDisplay(toplevel), XtWindow(toplevel),
++		    wm_attention, wm_attention, 8, PropModeReplace, NULL, 0);
+ 
+     if(screen->bellSuppressTime) {
+ 	/* now we change a property and wait for the notify event to come
+
+--Multipart_Mon_Jul__6_09:42:45_1998-1
+Content-Type: text/plain; charset=US-ASCII
+
+
+(define* (flash-window #&optional (win (get-window)))
+  (do ((start 0 (- 100 start))
+       (step 10 (- 0 step))
+       (n 0 (+ n 1)))
+      ((>= n 10))
+    (do ((color start (+ color step)))
+	((not (<= 0 color 100)))
+      (style-one-window win #:fg (string-append "grey" (number->string color)))
+      (sleep-ms 100))))
+
+(add-hook! X-PropertyNotify-hook
+	  (lambda (prop)
+	    (if (equal? prop "WM_ATTENTION")
+		(flash-window))))

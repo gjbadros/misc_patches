@@ -1,0 +1,369 @@
+*** linux/init/main.c.orig	Mon May 20 18:33:57 1996
+--- linux/init/main.c	Tue Jun 25 17:39:23 1996
+***************
+*** 63,68 ****
+--- 63,70 ----
+  extern void init_IRQ(void);
+  extern void init_modules(void);
+  extern long console_init(long, long);
++ extern void install_bootlogo(void);
++ extern void remove_bootlogo(void);
+  extern long kmalloc_init(long,long);
+  extern void sock_init(void);
+  extern long pci_init(long, long);
+***************
+*** 797,802 ****
+--- 809,815 ----
+  		memory_start += prof_len * sizeof(unsigned int);
+  	}
+  	memory_start = console_init(memory_start,memory_end);
++         install_bootlogo();
+  #ifdef CONFIG_PCI
+  	memory_start = pci_init(memory_start,memory_end);
+  #endif
+***************
+*** 959,964 ****
+--- 975,982 ----
+  	(void) open("/dev/tty1",O_RDWR,0);
+  	(void) dup(0);
+  	(void) dup(0);
++ 
++         fade_bootlogo();
+  
+  	if (!execute_command) {
+  		execve("/etc/init",argv_init,envp_init);
+*** linux/drivers/char/console.c.orig	Wed May 15 07:06:55 1996
+--- linux/drivers/char/console.c	Tue Jun 25 18:30:42 1996
+***************
+*** 102,107 ****
+--- 102,108 ----
+  #ifdef CONFIG_APM
+  #include <linux/apm_bios.h>
+  #endif
++ #include <linux/proc_fs.h>
+  
+  #include <asm/io.h>
+  #include <asm/system.h>
+***************
+*** 181,186 ****
+--- 182,190 ----
+  static int blankinterval = 10*60*HZ;
+  static int vesa_off_interval = 0;
+  static long blank_origin, blank__origin, unblank_origin;
++ int pengon=0;
++ void plot_penguin(void);
++ void unplot_penguin(void);
+  
+  
+  #ifdef CONFIG_SERIAL_ECHO
+***************
+*** 591,596 ****
+--- 595,601 ----
+  
+  	if (b > video_num_lines || t >= b)
+  		return;
++ 	if (pengon) unplot_penguin();
+  	if (t || b != video_num_lines)
+  		hardscroll = 0;
+  	if (hardscroll) {
+***************
+*** 645,650 ****
+--- 650,656 ----
+  			scr_writew(video_erase_char, d++);
+  		}
+  	}
++ 	if (pengon) plot_penguin();
+  }
+  
+  void
+***************
+*** 2309,2312 ****
+--- 2315,2602 ----
+  int con_get_font (char *arg)
+  {
+  	return set_get_font (arg,0,video_mode_512ch);
++ }
++ 
++ 
++ /*
++  * Penguin boot-logo (grotty hack, use at own risk)
++  *  July 1996 J Sullivan <js10039@chiark.chu.cam.ac.uk>
++  *
++  * Logo graphic by Larry Ewing for Linux 2.0
++  */
++ 
++ #define PENG_H 118
++ #define PENG_W 8
++ #define PENGC (color_table[12])
++ unsigned char pengfnt[944] =
++ 	"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
++ 	"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
++ 	"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
++ 	"\x00\x00\x00\x00\x00\x00\x01\x03\x1f\x60\x60\x60\x60\x70\x70\x70"
++ 	"\x60\x60\x40\x70\x1f\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
++ 	"\x00\x00\x00\x3f\x3f\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e\x0e"
++ 	"\x0e\x0e\x3f\x00\x00\x00\x00\x00\x00\x00\x0f\x3f\x3f\x3f\x3f\x3f"
++ 	"\x3f\x3f\x3e\x18\x10\x00"
++ 
++ 	"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
++ 	"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
++ 	"\x00\x00\x01\x01\x03\x07\x07\x07\x0f\x0f\x1f\x1f\x1f\x3f\x3f\x3f"
++ 	"\x7f\x7f\x7f\x07\x03\x81\x80\x80\x00\x00\x00\x00\x00\x00\x00\x00"
++ 	"\x00\x00\x00\x00\x80\xf8\x3f\x07\x00\x00\x00\x00\x00\x00\x00\x00"
++ 	"\x00\x00\x00\x80\x80\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x0c"
++ 	"\x0c\x0c\xfd\x00\x00\x00\x00\x00\x03\xff\xff\xff\xff\xff\xff\xfe"
++ 	"\xf0\x80\x00\x00\x00\x00"
++ 
++ 	"\x00\x00\x00\x01\x01\x03\x03\x03\x07\x07\x07\x07\x07\x07\x06\x07"
++ 	"\x07\x07\x07\x07\x07\x07\x07\x03\x03\x07\x0e\x0e\x1c\x3c\x3c\x78"
++ 	"\x78\xf8\xf8\xf0\xf0\xf0\xe0\xe0\xc0\xc0\xc0\x80\x80\x80\x80\x80"
++ 	"\x80\x80\x00\x80\xc0\xe0\xf0\x78\x7c\x3f\x1f\x1f\x0f\x07\x06\x03"
++ 	"\x03\x01\x01\x01\x03\x03\x9f\xff\xfc\x00\x00\x00\x00\x00\x00\x00"
++ 	"\x00\x00\x60\xf0\xf0\x60\x00\x00\xf3\xf3\x70\x70\x70\x70\x70\x70"
++ 	"\x70\x70\xfb\x00\x00\x00\x00\x01\xff\xff\xff\xff\xff\xff\xe0\x00"
++ 	"\x00\x00\x00\x00\x00\x00"
++ 
++ 	"\x00\x3f\x7f\xff\xff\xff\xff\xff\xff\xff\xff\xff\x1f\x5f\xff\xee"
++ 	"\xee\xf3\x80\x00\x00\x00\x80\xff\xf8\xe1\x7f\x3e\x18\x00\x00\x00"
++ 	"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
++ 	"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80\x80\x00\x00\x00"
++ 	"\x60\xff\xbf\xbf\xff\xff\x80\x00\x00\x00\x00\x00\x00\x00\x00\x00"
++ 	"\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\xe1\xe1\xe1\xe1\xe1\xe1"
++ 	"\xe1\xe1\xf3\x00\x00\x00\x00\xff\xff\xff\xff\xff\xf8\x00\x00\x00"
++ 	"\x00\x00\x00\x00\x00\x00"
++ 
++ 	"\x00\xc0\xf8\xff\xff\xf7\xff\xff\xff\xff\xff\xcf\x07\x77\x73\x6b"
++ 	"\x7b\x7b\x1f\x07\x03\x1b\xe3\x17\xf7\xc3\x81\x01\x01\x00\x00\x00"
++ 	"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
++ 	"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x03\x07"
++ 	"\x1f\xff\xff\xff\xff\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
++ 	"\x00\x00\x00\x00\x00\x00\x00\x00\x87\xcf\xc3\xc3\xc3\xc3\xc3\xc3"
++ 	"\xc3\xc3\xf1\x00\x00\x00\x03\xff\xff\xff\xff\xf0\x00\x00\x00\x00"
++ 	"\x00\x00\x00\x00\x00\x00"
++ 
++ 	"\x00\x00\x00\x00\x00\x80\xc0\xc0\xe0\xe0\xe0\xe0\xe0\xe0\xe0\xf0"
++ 	"\xf0\xf0\xf0\xf0\xf0\xf8\xf8\xbc\xdc\xfe\xfe\xff\xff\xff\xff\x7f"
++ 	"\x7f\x3f\x3d\x1e\x1e\x1f\x0f\x0f\x0f\x0f\x0f\x07\x07\x07\x07\x07"
++ 	"\x02\x03\x07\x1f\x37\x33\x23\x21\x20\x20\x20\x30\x30\xb0\xb0\xb0"
++ 	"\xf0\xf0\xf0\xe0\xf0\xf0\xfc\x3f\x1f\x00\x00\x00\x00\x00\x00\x00"
++ 	"\x00\x00\x00\x00\x00\x00\x00\x00\x8f\x8f\x87\x87\x87\x87\x87\x87"
++ 	"\x87\xff\xf7\x00\x00\x00\xff\xff\xff\xff\xf0\x00\x78\xcc\x4c\x08"
++ 	"\x18\x30\x44\xfc\x00\x00"
++ 
++ 	"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
++ 	"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80\x80\xc0\xc0"
++ 	"\xe0\xf0\xf0\xf8\xfc\xfc\xfe\xfe\xbe\xbe\xbf\xbf\xbf\xbf\xff\x7f"
++ 	"\x3f\xff\xff\xff\xfe\xfc\xf8\xf0\x00\x00\x00\x00\x00\x00\x00\x00"
++ 	"\x00\x00\x01\x07\x0e\x3c\xf0\xe0\xc0\x00\x00\x00\x00\x00\x00\x00"
++ 	"\x00\x00\x00\x00\x00\x00\x00\x00\x3f\x0e\x07\x07\x03\x01\x01\x03"
++ 	"\x06\x0c\xfe\x00\x00\x00\xff\xff\xff\xf0\x00\x00\x0f\x19\x19\x19"
++ 	"\x19\x19\x99\xcf\x00\x00"
++ 
++ 	"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
++ 	"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
++ 	"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80\x80"
++ 	"\x80\x80\x00\x00\x00\x00\x80\xc0\x40\x40\x60\x78\x1c\x06\x02\x06"
++ 	"\x1c\x70\xe0\x80\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
++ 	"\x00\x00\x00\x00\x00\x00\x00\x00\x3c\x18\x30\xe0\xc0\xc0\xe0\xf0"
++ 	"\x78\x38\x7e\x00\x00\x00\xfe\xfc\xc0\x00\x00\x00\x00\x80\x80\x80"
++ 	"\x80\x80\x80\x00\x00\x00"
++ ;
++ 
++ unsigned char pengofnt[(PENG_H+32)*PENG_W],olfnt[16384];
++ unsigned short olscr[PENG_W*((PENG_H+7)/8)];
++ unsigned char pengop[17][3];
++ int penguon=0,pengych,pengrch,peng9px,pengoclk;
++ 
++ static inline void pdelay(unsigned long q)
++ {
++ 	unsigned long b;
++ 
++ 	for ( b=0 ; b<q ; b++ ) SLOW_DOWN_IO; 
++ }
++ 
++ void install_bootlogo(void)
++ {
++ 	int currcons=fg_console;
++         int a,b,scan,ch;
++ 	unsigned short tc,*vp;
++ 
++         if (pengon) return;
++ 
++         con_get_font(olfnt);
++ 	pengrch = 0;
++         for ( a=0,scan=0,ch=0x80 ; a<PENG_H ; a++,scan++ ) {
++ 		if (scan==video_font_height) {
++ 			scan=0;
++ 			ch += PENG_W;
++ 			if (a>=80 && !pengrch) pengrch = (ch-0x80)/PENG_W;
++ 		}
++ 		for ( b=0 ; b<PENG_W ; b++ ) {
++                         pengofnt[PENG_H*b+a] = olfnt[32*(ch+b)+scan];
++                         olfnt[32*(ch+b)+scan] = pengfnt[PENG_H*b+a];
++ 		}
++         }
++ 	while (scan<video_font_height) {
++ 		for ( b=0 ; b<PENG_W ; b++ ) {
++ 			pengofnt[PENG_H*b+a] = olfnt[32*(ch+b)+scan];
++ 			olfnt[32*(ch+b)+scan] = 0;
++ 		}
++ 		scan++;
++ 		a++;
++ 	}
++ 	pengych = ((ch+PENG_W)-0x80)/PENG_W;
++ 	vp = (unsigned short *)origin;
++ 	for ( a=0 ; a<video_num_columns ; a++ ) for ( b=0 ; b<video_num_lines ; b++ ) {
++ 		tc = scr_readw((void *)vp) & 0xff;
++ 		if (tc>=0x80 && tc<ch+PENG_W) scr_writew(0,(void *)vp);
++ 		vp++;
++ 	}
++ 
++         con_set_font(olfnt,video_mode_512ch);
++         outb(1,0x3c4);
++ 	peng9px = inb(0x3c5);
++         if ((peng9px&1)==0) {
++ 		unsigned char t;
++ 		outb(1,0x3c4);
++ 		outb(peng9px ^ 1,0x3c5);
++ 		inb(0x3da);
++ 		outb(0x13,0x3c0);
++ 		t = inb(0x3c1);
++ 		inb(0x3da);
++ 		outb(0x33,0x3c0);
++ 		inb(0x3c1);
++ 		inb(0x3da);
++ 		outb(0x13,0x3c0);
++ 		outb(t&0xf0,0x3c0);
++ 		inb(0x3da);
++ 		outb(0x33,0x3c0);
++ 		outb(t&0xf0,0x3c0);
++ 		pengoclk = inb(0x3cc);
++ 		if ((pengoclk & 0x0c) == 0x04)     /* 28.322 Mhz for 720 HSIZE */
++ 			outb(pengoclk & ~4,0x3c2); /* 25.175 MHz for 640 HSIZE */
++ 		peng9px = 1;
++ 	} else peng9px = 0;
++         pengon = 1;
++         penguon = 0;
++         plot_penguin();
++         con_get_cmap((unsigned char *)pengop);
++         for ( b=0 ; b<3 ; b++ ) pengop[16][b] = pengop[PENGC][b];
++         for ( ; pengop[PENGC][0]>3   ; pengop[PENGC][0]-=4 ) { con_set_cmap((unsigned char *)pengop); pdelay(1000); }
++         for ( ; pengop[PENGC][1]<252 ; pengop[PENGC][1]+=4 ) { con_set_cmap((unsigned char *)pengop); pdelay(1000); }
++         for ( ; pengop[PENGC][1]>3   ; pengop[PENGC][1]-=4 ) { con_set_cmap((unsigned char *)pengop); pdelay(1000); }
++         for ( ; pengop[PENGC][2]<252 ; pengop[PENGC][2]+=4 ) { con_set_cmap((unsigned char *)pengop); pdelay(1000); }
++         for ( ; pengop[PENGC][2]>3   ; pengop[PENGC][2]-=4 ) { con_set_cmap((unsigned char *)pengop); pdelay(1000); }
++         for ( ; pengop[PENGC][0]<pengop[16][0] ; pengop[PENGC][0]+=4 ) { con_set_cmap((unsigned char *)pengop); pdelay(1000); }
++         for ( b=0 ; b<3 ; b++ ) pengop[PENGC][b] = pengop[16][b];
++         con_set_cmap((unsigned char *)pengop);
++ }
++ 
++ void plot_penguin(void)
++ {
++ 	int currcons=fg_console;
++         int a,b;
++ 	void *vp;
++ 	unsigned short *sp,wcv;
++ 
++         if (!pengon || penguon) return;
++ 
++         vp = (void *)origin + 2*video_num_columns - 2*PENG_W;
++ 	sp = olscr;
++ 	wcv = 0x7080;
++ 
++ 	for ( a=0 ; a<pengych ; a++ ) {
++ 		if (a==pengrch) wcv = 0x7c00|(wcv&0xff);
++         	for ( b=0 ; b<2*PENG_W ; b+=2 ) {
++ 			*sp++ = scr_readw(vp+b);
++ 			scr_writew(wcv++,vp+b);
++         	}
++ 		vp += 2*video_num_columns;
++         }
++         penguon = 1;
++ }
++ 
++ void unplot_penguin(void)
++ {
++         int a,b,currcons=fg_console;
++ 	void *vp;
++ 	unsigned short *sp;
++ 
++         if (!pengon || !penguon) return;
++ 
++ 	vp = (void *)origin + 2*video_num_columns - 2*PENG_W;
++ 	sp = olscr;
++ 
++         for ( a=0 ; a<pengych ; a++ ) {
++         	for ( b=0 ; b<2*PENG_W ; b+=2 ) {
++ 			scr_writew(*sp++,vp+b);
++ 		}
++ 		vp += 2*video_num_columns;
++         }
++         penguon = 0;
++ }
++ 
++ int remove_bootlogo(struct inode *ino,struct file *file,const char *buf,int count);
++ 
++ struct file_operations peng_fops = {
++ 	NULL,
++ 	NULL,
++ 	remove_bootlogo,    /* write() */
++ };
++ 
++ struct inode_operations peng_iops = {
++ 	&peng_fops,
++ };
++ 
++ struct proc_dir_entry proc_penguin = {
++ 	0,7,"penguin",S_IFREG|S_IWUSR,1,0,0,0,
++ 	&peng_iops,
++ };
++ 
++ int remove_bootlogo(struct inode *ino,struct file *file,const char *buf,int count)
++ {
++         int a,b,scan,ch;
++ 
++         if (!pengon) return -EINVAL;
++ 
++         unplot_penguin();
++         for ( a=0,scan=0,ch=0x80 ; ch<pengych+0x80 ; a++ ) {
++ 		for ( b=0 ; b<PENG_W ; b++ ) {
++                         olfnt[32*(ch+b)+scan] = pengofnt[PENG_H*b+a];
++ 		}
++ 		if (++scan==video_font_height) {
++ 			scan = 0;
++ 			ch += PENG_W;
++ 		}
++         }
++         con_set_font(olfnt,video_mode_512ch);
++ 	if (peng9px) {
++ 		unsigned char t;
++ 
++ 		outb(1,0x3c4);
++ 		peng9px = inb(0x3c5);
++ 		outb(1,0x3c4);
++ 		outb(peng9px ^ 1,0x3c5);
++ 		inb(0x3da);
++ 		outb(0x13,0x3c0);
++ 		t = inb(0x3c1);
++ 		inb(0x3da);
++ 		outb(0x33,0x3c0);
++ 		inb(0x3c1);
++ 		inb(0x3da);
++ 		outb(0x13,0x3c0);
++ 		outb((t&0xf0)|8,0x3c0);
++ 		inb(0x3da);
++ 		outb(0x33,0x3c0);
++ 		outb((t&0xf0)|8,0x3c0);
++ 		outb(pengoclk,0x3c2);
++ 	}
++ 
++ 	proc_unregister(&proc_root,proc_penguin.low_ino);
++         pengon = 0;
++ 	return count;
++ }
++ 
++ void fade_bootlogo(void)
++ {
++ 	if (!pengon) return;
++ 	proc_register_dynamic(&proc_root,&proc_penguin);
+  }

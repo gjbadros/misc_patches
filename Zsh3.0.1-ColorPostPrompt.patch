@@ -1,0 +1,1328 @@
+diff -c Src/globals.h ../zsh-3.0.1-gjb/Src/globals.h
+*** Src/globals.h	Thu Oct 10 04:05:11 1996
+--- ../zsh-3.0.1-gjb/Src/globals.h	Sat Oct 26 10:23:02 1996
+***************
+*** 331,336 ****
+--- 331,337 ----
+  EXTERN char *prompt4;
+  EXTERN char *rprompt;		/* $RPROMPT    */
+  EXTERN char *sprompt;
++ EXTERN char *postprompt;
+  
+  EXTERN char *wordchars;
+  EXTERN char *rstring, *Rstring;
+***************
+*** 744,749 ****
+--- 745,751 ----
+      {"listambiguous", 		0,    0,    0},
+      {"listbeep", 		0,    0,    OPT_ALL},
+      {"listtypes", 		'X',  0,    OPT_CSH},
++     {"listcolors", 		0,    0,    0},
+      {"localoptions", 		0,    0,    OPT_EMULATE|OPT_KSH},
+      {"login", 			'l',  'l',  OPT_SPECIAL},
+      {"longlistjobs", 		'R',  0,    0},
+diff -c Src/hashtable.h ../zsh-3.0.1-gjb/Src/hashtable.h
+*** Src/hashtable.h	Thu Oct 10 04:05:11 1996
+--- ../zsh-3.0.1-gjb/Src/hashtable.h	Sat Oct 26 10:23:02 1996
+***************
+*** 156,161 ****
+--- 156,162 ----
+  IPDEF7("PS4", &prompt4),
+  IPDEF7("RPS1", &rprompt),
+  IPDEF7("SPROMPT", &sprompt),
++ IPDEF7("POSTPROMPT", &postprompt),
+  IPDEF7("0", &argzero),
+  
+  #define IPDEF8(A,B,C) {NULL,A,PM_SCALAR|PM_SPECIAL,NULL,IFN(colonarrsetfn),IFN(colonarrgetfn),0,(void *)B,NULL,C,NULL,0}
+diff -c Src/init.c ../zsh-3.0.1-gjb/Src/init.c
+*** Src/init.c	Thu Oct 10 04:05:11 1996
+--- ../zsh-3.0.1-gjb/Src/init.c	Sat Oct 26 10:24:37 1996
+***************
+*** 522,527 ****
+--- 522,528 ----
+      }
+      prompt3 = ztrdup("?# ");
+      prompt4 = ztrdup("+ ");
++ 	postprompt = ztrdup("");
+      sprompt = ztrdup("zsh: correct '%R' to '%r' [nyae]? ");
+  
+      ifs         = ztrdup(DEFAULT_IFS);
+diff -c Src/signals.c ../zsh-3.0.1-gjb/Src/signals.c
+*** Src/signals.c	Sat Aug 31 08:01:27 1996
+--- ../zsh-3.0.1-gjb/Src/signals.c	Sat Oct 26 10:23:01 1996
+***************
+*** 309,314 ****
+--- 309,315 ----
+  
+      sigfillset(&set);
+      sigdelset(&set, sig);
++     sigdelset(&set, SIGALRM);
+      sigdelset(&set, SIGHUP);  /* still don't know why we add this? */
+      if (sig2)
+          sigdelset(&set, sig2);
+***************
+*** 319,324 ****
+--- 320,326 ----
+  
+      sigfillset(&set);
+      sigdelset(&set, sig);
++     sigdelset(&set, SIGALRM);
+      if (sig2)
+        sigdelset(&set, sig2);
+      ret = sigpause(set);
+***************
+*** 491,502 ****
+          break;
+  
+      case SIGALRM:
+!         if (sigtrapped[SIGALRM]) {
+  	    int tmout;
+!             dotrap(SIGALRM);
+!             if ((tmout = getiparam("TMOUT")))
+!                 alarm(tmout);           /* reset the alarm */
+!         } else {
+  	    int idle = ttyidlegetfn(NULL);
+  	    int tmout = getiparam("TMOUT");
+  	    if (idle >= 0 && idle < tmout)
+--- 493,512 ----
+          break;
+  
+      case SIGALRM:
+! 	if (!zleactive) {
+! 	    /* One possibility is to do the TRAPALRM fn -- however,
+! 	       I choose to save that for the TMOUT mechanism-- a new prompt
+! 	       is all we really need, methinks */
+! 	    /*dotrap(SIGALRM);*/
+! 	    putpostprompt();
+! 	    alarm(0);
+! 	    }
+! 	else if (sigtrapped[SIGALRM]) {
+  	    int tmout;
+! 	    dotrap(SIGALRM);
+! 	    if ((tmout = getiparam("TMOUT")))
+! 		alarm(tmout);		/* reset the alarm */
+! 	} else {
+  	    int idle = ttyidlegetfn(NULL);
+  	    int tmout = getiparam("TMOUT");
+  	    if (idle >= 0 && idle < tmout)
+diff -c Src/version.h ../zsh-3.0.1-gjb/Src/version.h
+*** Src/version.h	Wed Aug 28 03:31:40 1996
+--- ../zsh-3.0.1-gjb/Src/version.h	Sat Oct 26 10:23:43 1996
+***************
+*** 1 ****
+! #define ZSH_VERSION "3.0.1"
+--- 1 ----
+! #define ZSH_VERSION "3.0.1-gjb"
+diff -c Src/zle.h ../zsh-3.0.1-gjb/Src/zle.h
+*** Src/zle.h	Sun Aug 11 18:39:05 1996
+--- ../zsh-3.0.1-gjb/Src/zle.h	Sat Oct 26 10:23:02 1996
+***************
+*** 279,287 ****
+--- 279,289 ----
+      z_backwardchar,
+      z_backwarddeletechar,
+      z_backwarddeleteword,
++     z_backwarddeletewordpart,
+      z_backwardkillline,
+      z_backwardkillword,
+      z_backwardword,
++     z_backwardwordpart,
+      z_beginningofbufferorhistory,
+      z_beginningofhistory,
+      z_beginningofline,
+***************
+*** 291,296 ****
+--- 293,299 ----
+      z_completeword,
+      z_copyprevword,
+      z_copyregionaskill,
++     z_dabbrevcomplete,
+      z_deletechar,
+      z_deletecharorlist,
+      z_deleteword,
+***************
+*** 316,321 ****
+--- 319,326 ----
+      z_expandword,
+      z_forwardchar,
+      z_forwardword,
++     z_forwarddeletewordpart,
++     z_forwardwordpart,
+      z_getline,
+      z_gosmacstransposechars,
+      z_historybeginningsearchbackward,
+diff -c Src/zle_bindings.c ../zsh-3.0.1-gjb/Src/zle_bindings.c
+*** Src/zle_bindings.c	Fri Jun 28 06:43:51 1996
+--- ../zsh-3.0.1-gjb/Src/zle_bindings.c	Sat Oct 26 10:23:01 1996
+***************
+*** 42,50 ****
+--- 42,52 ----
+      {"backward-char", backwardchar, ZLE_MOVEMENT},
+      {"backward-delete-char", backwarddeletechar, ZLE_DELETE},
+      {"backward-delete-word", backwarddeleteword, ZLE_DELETE},
++     {"backward-delete-word-part", backwarddeletewordpart, ZLE_DELETE},
+      {"backward-kill-line", backwardkillline, ZLE_KILL},
+      {"backward-kill-word", backwardkillword, ZLE_KILL | ZLE_DELETE},
+      {"backward-word", backwardword, ZLE_MOVEMENT},
++     {"backward-word-part", backwardwordpart, ZLE_MOVEMENT},
+      {"beginning-of-buffer-or-history", beginningofbufferorhistory, ZLE_MOVEMENT},
+      {"beginning-of-history", beginningofhistory, 0},
+      {"beginning-of-line", beginningofline, ZLE_MOVEMENT},
+***************
+*** 54,59 ****
+--- 56,62 ----
+      {"complete-word", completeword, ZLE_MENUCMP},
+      {"copy-prev-word", copyprevword, 0},
+      {"copy-region-as-kill", copyregionaskill, ZLE_KILL},
++     {"dabbrev-complete", dabbrevcomplete, ZLE_MENUCMP},
+      {"delete-char", deletechar, ZLE_DELETE},
+      {"delete-char-or-list", deletecharorlist, ZLE_MENUCMP},
+      {"delete-word", deleteword, ZLE_DELETE},
+***************
+*** 79,84 ****
+--- 82,89 ----
+      {"expand-word", expandword, 0},
+      {"forward-char", forwardchar, ZLE_MOVEMENT},
+      {"forward-word", forwardword, ZLE_MOVEMENT},
++     {"forward-word-part", forwardwordpart, ZLE_MOVEMENT},
++     {"forward-delete-word-part", forwarddeletewordpart, ZLE_DELETE},
+      {"get-line", getline, 0},
+      {"gosmacs-transpose-chars", gosmacstransposechars, 0},
+      {"history-beginning-search-backward", historybeginningsearchbackward, ZLE_HISTSEARCH},
+***************
+*** 229,235 ****
+      /* ^Y */ z_yank,
+      /* ^Z */ z_undefinedkey,
+      /* ^[ */ z_prefix,
+!     /* ^\ */ z_undefinedkey,
+      /* ^] */ z_undefinedkey,
+      /* ^^ */ z_undefinedkey,
+      /* ^_ */ z_undo,
+--- 234,240 ----
+      /* ^Y */ z_yank,
+      /* ^Z */ z_undefinedkey,
+      /* ^[ */ z_prefix,
+!     /* ^\ */ z_backwarddeletewordpart,
+      /* ^] */ z_undefinedkey,
+      /* ^^ */ z_undefinedkey,
+      /* ^_ */ z_undo,
+***************
+*** 376,382 ****
+      /* M-, */ z_undefinedkey,
+      /* M-- */ z_negargument,
+      /* M-. */ z_insertlastword,
+!     /* M-/ */ z_undefinedkey,
+      /* M-0 */ z_digitargument,
+      /* M-1 */ z_digitargument,
+      /* M-2 */ z_digitargument,
+--- 381,387 ----
+      /* M-, */ z_undefinedkey,
+      /* M-- */ z_negargument,
+      /* M-. */ z_insertlastword,
+!     /* M-/ */ z_dabbrevcomplete,
+      /* M-0 */ z_digitargument,
+      /* M-1 */ z_digitargument,
+      /* M-2 */ z_digitargument,
+diff -c Src/zle_main.c ../zsh-3.0.1-gjb/Src/zle_main.c
+*** Src/zle_main.c	Fri Oct 25 12:25:18 1996
+--- ../zsh-3.0.1-gjb/Src/zle_main.c	Sat Oct 26 10:23:01 1996
+***************
+*** 342,347 ****
+--- 342,363 ----
+  
+  /* Read a line.  It is returned metafied. */
+  
++ #define cchMaxInZleLine 64
++ char szLastZleLine[cchMaxInZleLine];
++ 
++ /**/
++ void
++ putpostprompt(void)
++ {
++     int plen = 0;
++     char *szPostPrompt = putprompt(postprompt,&plen,NULL,0);
++     /*    fprintf(stderr,"SIGALRM case. szPostPrompt = %sn",szPostPrompt); 
++     fflush(stderr); */
++     fwrite(szPostPrompt,sizeof(char),plen,stderr);
++     fflush(stderr);
++     free(szPostPrompt);
++ }
++ 
+  /**/
+  unsigned char *
+  zleread(char *lp, char *rp)
+***************
+*** 417,424 ****
+  	initundo();
+  	if (isset(PROMPTCR))
+  	    putc('\r', shout);
+! 	if (tmout)
+! 	    alarm(tmout);
+  	genprompts();
+  	zleactive = 1;
+  	resetneeded = 1;
+--- 433,439 ----
+  	initundo();
+  	if (isset(PROMPTCR))
+  	    putc('\r', shout);
+! 	alarm(tmout);
+  	genprompts();
+  	zleactive = 1;
+  	resetneeded = 1;
+***************
+*** 489,496 ****
+  	statusline = NULL;
+  	invalidatelist();
+  	trashzle();
+  	zleactive = 0;
+! 	alarm(0);
+      } LASTALLOC;
+      zsfree(curhistline);
+      free(lastline);		/* freeundo */
+--- 504,515 ----
+  	statusline = NULL;
+  	invalidatelist();
+  	trashzle();
++ 	strncpy(szLastZleLine, line, cchMaxInZleLine);
+  	zleactive = 0;
+! 	if ((tmout = getiparam("PPTMOUT")) < 0)
+! 	    putpostprompt();
+! 	else /* if tmout == 0, we want to remove the alarm, so just call alarm */
+! 	    alarm(tmout);
+      } LASTALLOC;
+      zsfree(curhistline);
+      free(lastline);		/* freeundo */
+diff -c Src/zle_misc.c ../zsh-3.0.1-gjb/Src/zle_misc.c
+*** Src/zle_misc.c	Thu Oct 10 04:05:11 1996
+--- ../zsh-3.0.1-gjb/Src/zle_misc.c	Sat Oct 26 10:23:01 1996
+***************
+*** 805,810 ****
+--- 805,812 ----
+  static char *buf, *bp1, *bl0, *fm, *pmpt;
+  static int bracepos, bufspc;
+  
++ extern char szLastZleLine[];
++ 
+  /**/
+  char *
+  putprompt(char *fmin, int *lenp, int *wp, int cnt)
+***************
+*** 1038,1043 ****
+--- 1040,1048 ----
+  		break;
+  	    case 'M':
+  		stradd(hostnam);
++ 		break;
++ 	    case 'H':
++ 		stradd(szLastZleLine);
+  		break;
+  	    case 'm':
+  		if (!arg)
+diff -c Src/zle_tricky.c ../zsh-3.0.1-gjb/Src/zle_tricky.c
+*** Src/zle_tricky.c	Thu Oct 24 03:01:48 1996
+--- ../zsh-3.0.1-gjb/Src/zle_tricky.c	Sat Oct 26 10:23:02 1996
+***************
+*** 211,219 ****
+  #define COMP_COMPLETE 0
+  #define COMP_LIST_COMPLETE 1
+  #define COMP_SPELL 2
+! #define COMP_EXPAND 3
+! #define COMP_EXPAND_COMPLETE 4
+! #define COMP_LIST_EXPAND 5
+  #define COMP_ISEXPAND(X) ((X) >= COMP_EXPAND)
+  
+  /**/
+--- 211,220 ----
+  #define COMP_COMPLETE 0
+  #define COMP_LIST_COMPLETE 1
+  #define COMP_SPELL 2
+! #define COMP_DABBREV 3
+! #define COMP_EXPAND 4
+! #define COMP_EXPAND_COMPLETE 5
+! #define COMP_LIST_EXPAND 6
+  #define COMP_ISEXPAND(X) ((X) >= COMP_EXPAND)
+  
+  /**/
+***************
+*** 257,262 ****
+--- 258,364 ----
+      docomplete(COMP_SPELL);
+  }
+  
++ #ifdef SIMPLE_DABBREV_GJB
++ /* FIX: This should really use some of the completion stuff provided
++    elsewhere */
++ /**/
++ void
++ dabbrevcomplete(void)
++ {
++     char *pchStartWord = line+cs;
++     int ich = cs;
++     int cchWord = 0;
++     int ihistSearch = curhist;
++     Comp compc = NULL;
++     char *e;
++     char *h;
++     char hpatsav;
++     Histent he;
++     static int ihistLastWhenCompleting = -1;
++     static int ihistLastSearched = -1;
++     static char *pchStartWordLast = NULL;
++     static char cchInserted = 0;
++ 
++     if (ich > 0)
++ 	{
++ 	ich--;
++ 	pchStartWord--;
++ 	}
++     while (ich && !isspace(*pchStartWord))
++ 	{
++ 	ich--;
++ 	pchStartWord--;
++ 	}
++     if (isspace(*pchStartWord)) {
++ 	ich++;
++ 	pchStartWord++;
++     }
++     cchWord = cs-ich;
++     
++     /* Check if this is our second consecutive press, to continue old search */
++     if (ihistLastWhenCompleting == curhist && pchStartWordLast == pchStartWord
++ 	&& (lastcmd & ZLE_MENUCMP)) {
++ 	/* continue old search */
++ 	backdel(cchInserted);
++ 	cchInserted = 0;
++ 	ihistSearch = ihistLastSearched - 1;
++ 	if (ihistSearch < 0) {
++ 	    ihistSearch = curhist;
++ 	}
++     }
++ 
++     pchStartWordLast = pchStartWord;
++ 
++     while (1) {
++ 	/* Parse the pattern, if it isn't the null string. */
++ 	if (*pchStartWord) {
++ 	    char *thpat = dupstring(pchStartWord);
++ 	    thpat[cchWord] = '*';
++ 	    thpat[cchWord+1] = 0;
++ 	    tokenize(thpat);
++ 	    compc = parsereg(thpat);
++ 	}
++ 
++ 	/* FIX: First check earlier on the current line (in "line") */
++ 
++ 	/* Now search the history. */
++ 	while ((he = quietgethist(ihistSearch--))) {
++ 	    int iwords;
++ 	    for (iwords = 0; iwords < he->nwords; iwords++) {
++ 		h = he->text + he->words[iwords*2];
++ 		e = he->text + he->words[iwords*2+1];
++ 		hpatsav = *e;
++ 		*e = '\0';
++ 		/* We now have a word from the history, ignore it *
++ 		 * if it begins with a quote or `$'.              */
++ 		if (*h != '\'' && *h != '"' && *h != '`' && *h != '$' &&
++ 		    (!compc || domatch(h, compc, 0))) {
++ 		    cchInserted = strlen(h) - cchWord;
++ 		    /* Otherwise add it if it was matched. */
++ 		    inststrlen(h+cchWord,1,-1);
++ 		    goto cont;
++ 		}
++ 		if (hpatsav)
++ 		    *e = hpatsav;
++ 	    }
++ 	}
++ 	/* FIX: perhaps give it a prefix of '*' and retry */
++ 	break;
++     }
++ cont:
++     ihistLastSearched = ihistSearch;
++     ihistLastWhenCompleting = curhist;
++ }
++ #else /* ! SIMPLE_DABBREV_GJB */
++ /**/
++ void
++ dabbrevcomplete(void)
++ {
++     usemenu = useglob = 0;
++     docomplete(COMP_DABBREV);
++ }
++ #endif /* SIMPLE_DABBREV_GJB */
++ 
+  /**/
+  void
+  deletecharorlist(void)
+***************
+*** 686,692 ****
+  	    /* call the real spell checker, ash@aaii.oz.zu */
+  	    spckword(x, 0, lincmd, 0);
+  	    inststr(*x);
+! 	} else if (COMP_ISEXPAND(lst)) {
+  	    /* Do expansion. */
+  	    char *ol = (olst == COMP_EXPAND_COMPLETE) ?
+  		dupstring((char *)line) : (char *)line;
+--- 788,800 ----
+  	    /* call the real spell checker, ash@aaii.oz.zu */
+  	    spckword(x, 0, lincmd, 0);
+  	    inststr(*x);
+! 	} 
+! #ifndef SIMPLE_DABBREV_GJB
+! 	else if (lst == COMP_DABBREV) {
+! 	    /* FIX: What to do??? */
+! 	}
+! #endif
+! 	else if (COMP_ISEXPAND(lst)) {
+  	    /* Do expansion. */
+  	    char *ol = (olst == COMP_EXPAND_COMPLETE) ?
+  		dupstring((char *)line) : (char *)line;
+***************
+*** 3476,3482 ****
+--- 3584,4082 ----
+      return l + (cc / columns);
+  }
+  
++ /* Greg J. Badros's color matching feature adapted from color-ls patch, to fileutils-3.12
++    <gjb@cs.duke.edu>
++    (color-ls by Dennis Flaherty <dennisf@denix.elk.miles.com>
++    and Peter Anvin <Peter.Anvin@linux.org> based on original patches by Greg Lee
++    <lee@uhunix.uhcc.hawaii.edu>) */
++ 
++ /* These defn's were selectively lifted from the color-ls patch */
++  
++ /* Nonzero means use colors to mark types.  Also define the different
++    colors as well as the stuff for the LS_COLORS environment variable.
++    The LS_COLORS variable is now in a termcap-like format.  -o */
++ 
++ /* Note that color_no and color_yes equals boolean values; they will
++    be assigned to print_with_color which is a boolean variable */
++ 
++ enum indicator_no
++ { C_LEFT, C_RIGHT, C_END, C_NORM, C_FILE, C_DIR, C_LINK, C_FIFO, C_SOCK, 
++   C_BLK, C_CHR, C_MISSING, C_ORPHAN, C_EXEC };
++ 
++ char *indicator_name[]=
++ {
++   "lc","rc","ec","no","fi","di","ln","pi","so","bd","cd","mi","or","ex",0
++ };
++ 
++ /* Null is a valid character in a color indicator (think about Epson
++    printers, for example) so we have to use a length/buffer string
++    type. */
++ 
++ struct bin_str
++ {
++   unsigned int len;		/* Number of bytes */
++   char *string;			/* Pointer to the same */
++ };
++ 
++ struct bin_str color_indicator[] =
++ {
++   { 2, "\033[" },		/* lc: Left of color sequence */
++   { 1, "m" },			/* rc: Right of color sequence */
++   { 0, NULL },			/* ec: End color (replaces lc+no+rc) */
++   { 1, "0" },			/* no: Normal */
++   { 1, "0" },			/* fi: File: default */
++   { 2, "32" },			/* di: Directory: green */
++   { 2, "36" },			/* ln: Symlink: cyan */
++   { 2, "31" },			/* pi: Pipe: red */
++   { 2, "33" },			/* so: Socket: yellow/brown */
++   { 5, "44;37" },		/* bd: Block device: white on blue */
++   { 5, "44;37" },		/* cd: Char device: white on blue */
++   { 0, NULL },			/* mi: Missing file: undefined */
++   { 0, NULL },			/* or: Orphanned symlink: undefined */
++   { 2, "35" }			/* ex: Executable: purple */
++ };
++ 
++ struct col_ext_type
++ {
++   struct bin_str ext;		/* The extension we're looking for */
++   struct bin_str seq;		/* The sequence to output when we do */
++   struct col_ext_type *next;	/* Next in list */
++ };
++ 
++ struct col_ext_type *col_ext_list = NULL;
++ char *color_buf;		/* Buffer for color sequences */
++ 
++ /* prototypes for color list-matching fns, added by GJB */
++ static int parse_ls_color ();
++ static int get_funky_string (char **dest, char **src, int equals_end);
++ static void print_color_indicator (FILE *stream, char *name, unsigned int mode, int linkok);
++ static void put_indicator(FILE *stream, struct bin_str *ind);
++ 
++ /* Parse the (Z)LS_COLORS/(Z)LS_COLOURS variable */
++ 
++ /* Function parse_ls_color from color-ls patch, now uses getsparam instead
++    of getenv, and checks for ZLS_COLORS and ZLS_COLOURS before the names w/o Z */
++ 
++ static int
++ parse_ls_color ()
++ {
++   char *p;			/* Pointer to character being parsed */
++   char *whichvar;		/* LS_COLORS or LS_COLOURS? */
++   char *buf;			/* color_buf buffer pointer */
++   int state;			/* State of parser */
++   int ind_no;			/* Indicator number */
++   char label[3] = "??";		/* Indicator label */
++   struct col_ext_type *ext = 0;	/* Extension we are working on */
++   struct col_ext_type *ext2 = 0;/* Extra pointer */
++   int print_with_color = 0;	/* Parsed ok so we can? This is the return value */
++ 
++   /* Let ZLS_COLO(U)RS take precedence of LS_COLO(U)RS in case
++      the user wants different colors for zsh completion listing and color-ls */
++   if ( (p = getsparam(whichvar = "ZLS_COLORS")) ||
++        (p = getsparam(whichvar = "ZLS_COLOURS")) ||
++        (p = getsparam(whichvar = "LS_COLORS")) ||
++        (p = getsparam(whichvar = "LS_COLOURS")) ) {
++       /* print_with_color's semantics have changed from color_ls --
++ 	 isset(LISTCOLORS) is used to tell if the user *wants* color,
++ 	 while print_with_color is set true if we parsed a color variable ok
++ 	 so she may see the color */
++       print_with_color = 1;
++       buf = color_buf = (char *) zalloc(strlen(p));
++       /* This is an overly conservative estimate, but any possible
++          LS_COLORS string will *not* generate a color_buf longer than
++ 	 itself, so it is a safe way of allocating a buffer in
++ 	 advance. */
++       
++       state = 1;
++       while ( state > 0 ) 
++ 	{
++ 	  switch(state)
++ 	    {
++ 	    case 1:		/* First label character */
++ 	      switch ( *p )
++ 		{
++ 		case ':':
++ 		  p++;
++ 		  break;
++ 		  
++ 		case '*':
++ 		  /* Allocate new extension block and add to head
++ 		     of linked list (this way a later definition will
++ 		     override an earlier one, which can be useful for
++ 		     having terminal-specific defs override global) */
++ 		  
++ 		  ext = (struct col_ext_type *)
++ 		    zalloc(sizeof(struct col_ext_type));
++ 		  ext->next = col_ext_list;
++ 		  col_ext_list = ext;
++ 
++ 		  p++;
++ 		  ext->ext.string = buf;
++ 		  
++ 		  state = (ext->ext.len =
++ 			   get_funky_string(&buf,&p,1)) < 0 ? -1 : 4;
++ 		  break;
++ 		  
++ 		case '\0':
++ 		  state = 0;	/* Done! */
++ 		  break;
++ 		  
++ 		default:	/* Assume it is file type label */
++ 		  label[0] = *(p++);
++ 		  state = 2;
++ 		  break;
++ 		}
++ 	      break;
++ 	      
++ 	    case 2:		/* Second label character */
++ 	      if ( *p )
++ 		{
++ 		  label[1] = *(p++);
++ 		  state = 3;
++ 		}
++ 	      else
++ 		state = -1;	/* Error */
++ 	      break;
++ 
++ 	    case 3:		/* Equal sign after indicator label */
++ 	      state = -1;	/* Assume failure... */
++ 	      if ( *(p++) == '=' )	/* It *should* be... */
++ 		{
++ 		  for ( ind_no = 0 ; indicator_name[ind_no] != NULL ;
++ 		       ind_no++ )
++ 		    {
++ 		      if ( strcmp(label,indicator_name[ind_no]) == 0 )
++ 			{
++ 			  color_indicator[ind_no].string = buf;
++ 			  state = (color_indicator[ind_no].len =
++ 				   get_funky_string(&buf,&p,0)) < 0 ?
++ 				     -1 : 1;
++ 			  break;
++ 			}
++ 		    }
++ 		  if ( state == -1 )
++ 		    fprintf(stderr, "Unknown prefix: %s\n", label);
++ 		}
++ 	      break;
++ 
++ 	    case 4:		/* Equal sign after *.ext */
++ 	      if ( *(p++) == '=' )
++ 		{
++ 		  ext->seq.string = buf;
++ 		  state = (ext->seq.len =
++ 			   get_funky_string(&buf,&p,0)) < 0 ?
++ 			     -1 : 1;
++ 		}
++ 	      else
++ 		state = -1;
++ 	      break;
++ 	    }
++ 	}
++ 
++       if ( state < 0 )
++ 	{
++ 	  fprintf(stderr, "Bad %s variable\n", whichvar);
++ 	  free(color_buf);
++ 	  for ( ext = col_ext_list ; ext != NULL ; )
++ 	    {
++ 	      ext2 = ext;
++ 	      ext = ext->next;
++ 	      free (ext2);
++ 	    }
++ 	  print_with_color = 0;
++ 	}
++     }
++   return print_with_color;
++ }
++ 
++ /* Function get_funky_string directly from color-ls patch,
++  coding style changed to match zsh's */
++ 
++ /* Parse a string as part of the LS_COLO(U)RS variable; this may involve
++    decoding all kinds of escape characters.  If equals_end is set an
++    unescaped equal sign ends the string, otherwise only a : or \0
++    does.  Returns the number of characters output, or -1 on failure.
++ 
++    The resulting string is *not* null-terminated, but may contain
++    embedded nulls.
++ 
++    Note that both dest and src are char **; on return they point to
++    the first free byte after the array and the character that ended
++    the input string, respectively. */
++ 
++ static int
++ get_funky_string (char **dest, char **src, int equals_end)
++ {
++     int num = 0;		/* For numerical codes */
++     int count;			/* Something to count with */
++     enum { st_gnd, st_backslash, st_octal, st_hex, st_caret,
++ 	   st_end, st_error } 
++     state;
++     char *p, *q;
++ 
++     p = *src;  q = *dest;		/* We don't want to double-indirect
++ 					   the whole darn time */
++     
++     count = 0;			/* No characters counted in yet */
++ 
++     state = st_gnd;		/* Start in ground state */
++     while ( state < st_end ) {
++ 	switch ( state ) {
++ 	case st_gnd:		/* Ground state (no escapes) */
++ 	    switch ( *p )
++ 		{
++ 		case ':':
++ 		case '\0':
++ 		    state = st_end;	/* End of string */
++ 		    break;
++ 		case '\\':
++ 		    state = st_backslash; /* Backslash scape sequence */
++ 		    p++;
++ 		    break;
++ 		case '^':
++ 		    state = st_caret;	/* Caret escape */
++ 		    p++;
++ 		    break;
++ 		case '=':
++ 		    if ( equals_end )
++ 			{
++ 			    state = st_end; /* End */
++ 			    break;
++ 			}
++ 		    /* else fall through */
++ 		default:
++ 		    *(q++) = *(p++);
++ 		    count++;
++ 		    break;
++ 		}
++ 	    break;
++ 
++ 	case st_backslash:	/* Backslash escaped character */
++ 	    switch ( *p ) {
++ 	    case '0':
++ 	    case '1':
++ 	    case '2':
++ 	    case '3':
++ 	    case '4':
++ 	    case '5':
++ 	    case '6':
++ 	    case '7':
++ 		state = st_octal;	/* Octal sequence */
++ 		num = *p - '0';
++ 		break;
++ 	    case 'x':
++ 	    case 'X':
++ 		state = st_hex;	/* Hex sequence */
++ 		num = 0;
++ 		break;
++ 	    case 'a':		/* Bell */
++ 		num = 7;		/* Not all C compilers know what \a means */
++ 		break;
++ 	    case 'b':		/* Backspace */
++ 		num = '\b';
++ 		break;
++ 	    case 'e':		/* Escape */
++ 		num = 27;
++ 		break;
++ 	    case 'f':		/* Form feed */
++ 		num = '\f';
++ 		break;
++ 	    case 'n':		/* Newline */
++ 		num = '\n';
++ 		break;
++ 	    case 'r':		/* Carriage return */
++ 		num = '\r';
++ 		break;
++ 	    case 't':		/* Tab */
++ 		num = '\t';
++ 		break;
++ 	    case 'v':		/* Vtab */
++ 		num = '\v';
++ 		break;
++ 	    case '?':		/* Delete */
++ 		num = 127;
++ 		break;
++ 	    case '_':		/* Space */
++ 		num = ' ';
++ 		break;
++ 	    case '\0':		/* End of string */
++ 		state = st_error;	/* Error! */
++ 		break;
++ 	    default:		/* Escaped character like \ ^ : = */
++ 		num = *p;
++ 		break;
++ 	    }
++ 	    if ( state == st_backslash ) {
++ 		*(q++) = num;
++ 		count++;
++ 		state = st_gnd;
++ 	    }
++ 	    p++;
++ 	    break;
++ 
++ 	case st_octal:		/* Octal sequence */
++ 	    if ( *p < '0' || *p > '7' ) {
++ 		*(q++) = num;
++ 		count++;
++ 		state = st_gnd;
++ 	    }
++ 	    else
++ 		num = ( num << 3 ) + ( *(p++) - '0' );
++ 	    break;
++ 
++ 	case st_hex:		/* Hex sequence */
++ 	    switch ( *p ) {
++ 	    case '0':
++ 	    case '1':
++ 	    case '2':
++ 	    case '3':
++ 	    case '4':
++ 	    case '5':
++ 	    case '6':
++ 	    case '7':
++ 	    case '8':
++ 	    case '9':
++ 		num = ( num << 4 ) + ( *(p++) - '0' );
++ 		break;
++ 	    case 'a':
++ 	    case 'b':
++ 	    case 'c':
++ 	    case 'd':
++ 	    case 'e':
++ 	    case 'f':
++ 		num = ( num << 4 ) + ( *(p++) - 'a' ) + 10;
++ 		break;
++ 	    case 'A':
++ 	    case 'B':
++ 	    case 'C':
++ 	    case 'D':
++ 	    case 'E':
++ 	    case 'F':
++ 		num = ( num << 4 ) + ( *(p++) - 'A' ) + 10;
++ 		break;
++ 	    default:
++ 		*(q++) = num;
++ 		count++;
++ 		state = st_gnd;
++ 		break;
++ 	    }
++ 	    break;
++ 
++ 	case st_caret:		/* Caret escape */
++ 	    state = st_gnd;	/* Should be the next state... */
++ 	    if ( *p >= '@' && *p <= '~' ) {
++ 		*(q++) = *(p++) & 037;
++ 		count++;
++ 	    }
++ 	    else if ( *p == '?' ) {
++ 		*(q++) = 127;
++ 		count++;
++ 	    }
++ 	    else
++ 		state = st_error;
++ 	    break;
++ 	default:
++ 	    break;
++ 	}
++     }
++ 
++     *dest = q;  *src = p;
++ 
++     return ( state == st_error ) ? -1 : count;
++ }
++ 
++ /* GJB modified this fn from color-ls patch to use zsh's file_type fn
++    instead of the macros that color-ls used.  Also a leading stream argument
++    is needed since zsh uses shout for its output stream */
++ 
++ static void
++ print_color_indicator (FILE *stream, char *name, unsigned int mode, int linkok)
++ {
++     int type = C_FILE;
++     struct col_ext_type *ext;	/* Color extension */
++     int len;			/* Length of name */
++     
++     /* Is this a nonexistent file?  If so, linkok == -1 */
++ 
++     if ( linkok == -1 && color_indicator[C_MISSING].string ) {
++ 	ext = NULL;
++ 	type = C_MISSING;
++     }
++     else {
++ 	/* Test if is is a recognized extension */
++ 	len = strlen(name);
++ 	name += len;			/* Pointer to final \0 */
++ 	for ( ext = col_ext_list ; ext != NULL ; ext = ext->next ) {
++ 	    if ( ext->ext.len <= len &&
++ 		 strncmp(name-ext->ext.len,ext->ext.string,ext->ext.len)  == 0 )
++ 		break;
++ 	}
++       
++ 	/* gjb uses glob.c's file_type to replace similar handling in color_ls */
++ 	if ( !ext ) {
++ 	    char chFileType = file_type(mode);
++ 	    
++ 	    if (chFileType == '/')
++ 		type = C_DIR;
++ 	    else if (chFileType == '@')
++ 		type = (!linkok && color_indicator[C_ORPHAN].string) ?
++ 		    C_ORPHAN : C_LINK;
++ 	    else if (chFileType == '|')
++ 		type = C_FIFO;
++ 	    else if (chFileType == '=')
++ 		type = C_SOCK;
++ 	    else if (chFileType == '#')
++ 		type = C_BLK;
++ 	    else if (chFileType == '%')
++ 		type = C_CHR;
++ 	    else if ( chFileType == '*' )
++ 		type = C_EXEC;
++ 	}
++     }
++ 
++   put_indicator(stream,&color_indicator[C_LEFT]);
++   put_indicator(stream,ext ? &(ext->seq) : &color_indicator[type]);
++   put_indicator(stream,&color_indicator[C_RIGHT]);
++ }
++ 
++ 
++ /* GJB: added a leading stream argument, since zsh needs to output to shout 
++    fn put_indicator is otherwise from color_ls patch */
++ 
++ /* Output a color indicator (which may contain nulls) */
++ static void
++ put_indicator(FILE *stream, struct bin_str *ind)
++ {
++   register int i;
++   register char *p;
++ 
++   p = ind->string;
++ 
++   for ( i = ind->len ; i ; i-- )
++     if (fputc(*(p++),stream) < 0)
++        break;
++ }
++ 
++ 
++ /* FIX: need to write fSymLinkOk, or replace the call further down if this
++    functionality exists elsewhere */
++ /* Return true (non-zero) iff szPathname's symlink exists
++  (i.e. it is not an orphaned symlink */
++ 
++ /**/
++ int
++ fSymLinkOk(char *szPathname)
++ {
++     /* Currently, this behaviour lets symlink's colors be decided
++        by the file that they point to-- this is nice w/LISTTYPES, since a symlink
++        to a directory might look like "symtodir@" in blue, a regular
++        directory might look like "regdir/" in blue */
++     return !(access(szPathname, F_OK) == -1);
++ }
++ 
+  /* List the matches.  Note that the list entries are metafied. */
++ /* Adapted to include colorized listing like color-ls by 
++    Greg J. Badros <gjb@cs.duke.edu> 8/22/96 */
+  
+  /**/
+  void
+***************
+*** 3488,3493 ****
+--- 4088,4094 ----
+      char **arr, **ap, sav;
+      int nfpl, nfsl, nlpl, nlsl;
+      int listmax = getiparam("LISTMAX");
++     int fListColors = (isset(LISTCOLORS) && !(haswhat & HAS_MISC));
+  
+  #ifdef DEBUG
+      /* Sanity check */
+***************
+*** 3499,3504 ****
+--- 4100,4112 ----
+      }
+  #endif
+  
++     if (fListColors) {
++ 	/* FIX: Might want to track when (Z)LS_COLO(U)RS variable changes and only
++ 	   parse the variable then, or when LISTCOLORS option gets set */
++ 	if (!parse_ls_color())
++ 	    fListColors = 0;
++     }
++ 
+      /* Calculate lengths of prefixes/suffixes to be added */
+      nfpl = fpre ? niceztrlen(fpre) : 0;
+      nfsl = fsuf ? niceztrlen(fsuf) : 0;
+***************
+*** 3598,3669 ****
+      /* Now print the matches. */
+      for (t1 = 0; t1 != colsz; t1++) {
+  	ap = arr + t1;
+! 	if (of) {
+! 	    /* We have to print the file types. */
+! 	    while (*ap) {
+! 		int t2;
+! 		char *pb;
+! 		struct stat buf;
+  
+! 		/* Build the path name for the stat. */
+! 		if (ispattern) {
+! 		    int cut = strlen(*ap) - boff;
+  
+! 		    sav = ap[0][cut];
+! 		    ap[0][cut] = '\0';
+! 		    nicezputs(*ap + off, shout);
+! 		    t2 = niceztrlen(*ap + off);
+! 		    ap[0][cut] = sav;
+  		    pb = *ap;
+  		} else {
+- 		    nicezputs(fpre, shout);
+- 		    nicezputs(*ap, shout);
+- 		    nicezputs(fsuf, shout);
+- 		    t2 = nfpl + niceztrlen(*ap) + nfsl;
+  		    pb = (char *) ncalloc((prpre ? strlen(prpre) : 0) + 3 +
+  					  strlen(fpre) + strlen(*ap) + strlen(fsuf));
+  		    sprintf(pb, "%s%s%s%s",
+  			    (prpre && *prpre) ? prpre : "./", fpre, *ap, fsuf);
+  		}
+! 		if (ztat(pb, &buf, 1))
+  		    putc(' ', shout);
+  		else
+- 		    /* Print the file type character. */
+  		    putc(file_type(buf.st_mode), shout);
+- 		for (t0 = colsz; t0 && *ap; t0--, ap++);
+- 		if (*ap)
+- 		    /* And add spaces to make the columns aligned. */
+- 		    for (++t2; t2 < fw; t2++)
+- 			putc(' ', shout);
+  	    }
+- 	} else
+- 	    while (*ap) {
+- 		int t2;
+  
+! 		if (ispattern) {
+! 		    int cut = strlen(*ap) - boff;
+! 
+! 		    sav = ap[0][cut];
+! 		    ap[0][cut] = '\0';
+! 		    nicezputs(*ap + off, shout);
+! 		    t2 = niceztrlen(*ap + off);
+! 		    ap[0][cut] = sav;
+! 		} else if (!(haswhat & HAS_MISC)) {
+! 		    nicezputs(fpre, shout);
+! 		    nicezputs(*ap, shout);
+! 		    nicezputs(fsuf, shout);
+! 		    t2 = nfpl + niceztrlen(*ap) + nfsl;
+! 		} else {
+! 		    nicezputs(lpre, shout);
+! 		    nicezputs(*ap, shout);
+! 		    nicezputs(lsuf, shout);
+! 		    t2 = nlpl + niceztrlen(*ap) + nlsl;
+! 		}
+! 		for (t0 = colsz; t0 && *ap; t0--, ap++);
+! 		if (*ap)
+! 		    for (; t2 < fw; t2++)
+! 			putc(' ', shout);
+! 	    }
+  	if (t1 != colsz - 1 || !clearflag)
+  	    putc('\n', shout);
+      }
+--- 4206,4289 ----
+      /* Now print the matches. */
+      for (t1 = 0; t1 != colsz; t1++) {
+  	ap = arr + t1;
+! 	while (*ap) {
+! 	    int t2;
+! 	    char *pb;
+! 	    struct stat buf;
+! 	    int ztat_return = 0;
+  
+! 	    if (of || fListColors) {
+! 	    /* We need to do a stat for either a colors or suffix character */
+  
+! 		/* Build the path name for the stat, but don't print it */
+! 		if (ispattern) {
+  		    pb = *ap;
+  		} else {
+  		    pb = (char *) ncalloc((prpre ? strlen(prpre) : 0) + 3 +
+  					  strlen(fpre) + strlen(*ap) + strlen(fsuf));
+  		    sprintf(pb, "%s%s%s%s",
+  			    (prpre && *prpre) ? prpre : "./", fpre, *ap, fsuf);
+  		}
+! 
+! 		/* do the stat */
+! 		ztat_return = ztat(pb,&buf,1);
+! 
+! 		/* print the color escape sequence, if options say to */
+! 		if (fListColors) {
+! 		    print_color_indicator(shout,*ap,buf.st_mode,fSymLinkOk(pb));
+! 		}
+! 	    }
+! 
+! 	    /* now print the name-- this code was in the analogous
+! 	       block above which now just builds the path name.  It
+! 	       needed to be printed *after* the color escape sequence,
+! 	       and it was factored out for non-fListColors and non-fListTypes code */
+! 
+! 	    if (ispattern) {
+! 		int cut = strlen(*ap) - boff;
+! 		sav = ap[0][cut];
+! 		ap[0][cut] = '\0';
+! 		nicezputs(*ap + off, shout);
+! 		t2 = niceztrlen(*ap + off);
+! 		ap[0][cut] = sav;
+! 	    } else if (!(haswhat & HAS_MISC)) {
+! 		nicezputs(fpre, shout);
+! 		nicezputs(*ap, shout);
+! 		nicezputs(fsuf, shout);
+! 		t2 = nfpl + niceztrlen(*ap) + nfsl;
+! 	    } else {
+! 		nicezputs(lpre, shout);
+! 		nicezputs(*ap, shout);
+! 		nicezputs(lsuf, shout);
+! 		t2 = nlpl + niceztrlen(*ap) + nlsl;
+! 	    }
+! 
+! 	    /* Turn off the color change [if any] before doing space alignment */
+! 	    if (fListColors) {
+! 		if ( color_indicator[C_END].string ) {
+! 		    put_indicator(shout,&color_indicator[C_END]);
+! 		}
+! 		    else {
+! 			put_indicator(shout,&color_indicator[C_LEFT]);
+! 			put_indicator(shout,&color_indicator[C_NORM]);
+! 			put_indicator(shout,&color_indicator[C_RIGHT]);
+! 		    }
+! 	    }
+! 
+! 	    /* Now print the trailing suffix if listtypes option is set */
+! 	    if (of) {
+! 		if (ztat_return)
+  		    putc(' ', shout);
+  		else
+  		    putc(file_type(buf.st_mode), shout);
+  	    }
+  
+! 	    for (t0 = colsz; t0 && *ap; t0--, ap++);
+! 	    if (*ap)
+! 		/* And add spaces to make the columns aligned. */
+! 		for (++t2; t2 < fw; t2++)
+! 		    putc(' ', shout);
+! 	}
+  	if (t1 != colsz - 1 || !clearflag)
+  	    putc('\n', shout);
+      }
+***************
+*** 3675,3680 ****
+--- 4295,4312 ----
+  	    showinglist = -1;
+  	} else
+  	    clearflag = 0, putc('\n', shout);
++     /* FIX: Do this only when listcolor option gets unset, assuming the parsing
++      is done once when option is set or when variable changes, as described in
++      other fix comment above */
++     if (fListColors) {
++ 	struct col_ext_type *ext;
++ 	free(color_buf);
++ 	while ( col_ext_list ) {
++ 	    ext = col_ext_list;
++ 	    col_ext_list = col_ext_list->next;
++ 	    free(ext);
++ 	}
++     }
+  }
+  
+  /* This is used to print expansions. */
+diff -c Src/zle_word.c ../zsh-3.0.1-gjb/Src/zle_word.c
+*** Src/zle_word.c	Fri Jun 28 06:43:51 1996
+--- ../zsh-3.0.1-gjb/Src/zle_word.c	Sat Oct 26 10:23:02 1996
+***************
+*** 53,58 ****
+--- 53,111 ----
+  
+  /**/
+  void
++ forwardwordpart(void)
++ {
++     if (zmult < 0) {
++ 	zmult = -zmult;
++ 	backwardwordpart();
++ 	return;
++     }
++     while (zmult--) {
++ 	/* skip to next uppercase character after current character */
++ 	if (cs != ll)
++ 	    cs++;
++ 	while (cs != ll && !iword(line[cs]))
++ 	    cs++;
++ 	while (cs != ll && iword(line[cs]) && !isupper(line[cs]))
++ 	    cs++;
++ 	if (wordflag && !zmult) {
++ 	    return;
++ 	}
++ 	while (cs != ll && !iword(line[cs]))
++ 	    cs++;
++     }
++ }
++ 
++ /**/
++ void
++ forwarddeletewordpart(void)
++ {
++     int x = cs;
++ 
++     if (zmult < 0) {
++ 	zmult = -zmult;
++ 	backwarddeletewordpart();
++ 	return;
++     }
++     while (zmult--) {
++ 	/* delete to next uppercase character after current character */
++ 	if (x != ll)
++ 	    x++;
++ 	while (x != ll && !iword(line[x]))
++ 	    x++;
++ 	while (x != ll && iword(line[x]) && !isupper(line[x]))
++ 	    x++;
++ 	if (wordflag && !zmult) {
++ 	    break;
++ 	}
++ 	while (x != ll && !iword(line[cs]))
++ 	    x++;
++     }
++     foredel(x-cs);
++ }
++ 
++ /**/
++ void
+  viforwardword(void)
+  {
+      if (zmult < 0) {
+***************
+*** 167,172 ****
+--- 220,280 ----
+  	while (cs && iword(line[cs - 1]))
+  	    cs--;
+      }
++ }
++ 
++ /**/
++ void
++ backwardwordpart(void)
++ {
++     if (zmult < 0) {
++ 	zmult = -zmult;
++ 	forwardwordpart();
++ 	return;
++     }
++     while (zmult--) {
++ 	/* skip to char after first lowercase after any uppercase character
++ 	   (do *not* look at current char) */
++ 	if (cs > 0)
++ 	    cs--;
++ 	while (cs && !iword(line[cs]))
++ 	    cs--;
++ 	while (cs && iword(line[cs]) && !isupper(line[cs]))
++ 	    cs--;
++ 	if (wordflag && !zmult) {
++ 	    return;
++ 	}
++ 	if (cs && !iword(line[cs]))
++ 	    cs--;
++     } 
++ }
++ 
++ /**/
++ void
++ backwarddeletewordpart(void)
++ {
++     int x = cs;
++ 
++     if (zmult < 0) {
++ 	zmult = -zmult;
++ 	forwarddeletewordpart();
++ 	return;
++     }
++     while (zmult--) {
++ 	/* skip to char after first lowercase after any uppercase character
++ 	   (do *not* look at current char) */
++ 	if (x > 0)
++ 	    x--;
++ 	while (x && !iword(line[x]))
++ 	    x--;
++ 	while (x && iword(line[x]) && !isupper(line[x]))
++ 	    x--;
++ 	if (wordflag && !zmult) {
++ 	    break;
++ 	}
++ 	if (x && !iword(line[x]))
++ 	    x--;
++     }
++     backdel(cs-x);
+  }
+  
+  /**/
+diff -c Src/zsh.h ../zsh-3.0.1-gjb/Src/zsh.h
+*** Src/zsh.h	Thu Oct 10 04:05:12 1996
+--- ../zsh-3.0.1-gjb/Src/zsh.h	Sat Oct 26 10:23:02 1996
+***************
+*** 1115,1120 ****
+--- 1115,1121 ----
+      LISTAMBIGUOUS,
+      LISTBEEP,
+      LISTTYPES,
++     LISTCOLORS,
+      LOCALOPTIONS,
+      LOGINSHELL,
+      LONGLISTJOBS,

@@ -1,0 +1,53 @@
+*** windows.c	1996/08/23 21:56:21	1.1
+--- windows.c	1996/08/23 22:01:43
+***************
+*** 48,53 ****
+--- 48,54 ----
+    char *t_hot;			/* Menu label with hotkey added */
+    char scut = '0';		/* Current short cut key */
+  
++   int fOnlyIcons = False;
+    int show_geometry = False;
+    int desk_mode = 0;
+    long desk_num = 0;
+***************
+*** 62,67 ****
+--- 63,69 ----
+      else if (mystrcasecmp(tmp, "UseWindowNames") == 0) use_icon_name = False;
+      else if (mystrcasecmp(tmp, "ShowAllDesks") == 0) desk_mode = 0;
+      else if (mystrcasecmp(tmp, "ShowCurrentDesk") == 0) desk_mode = 2;
++     else if (mystrcasecmp(tmp, "ShowOnlyIcons") == 0) fOnlyIcons = True;
+      else if (mystrcasecmp(tmp, "ShowDesk") == 0)
+        {
+        int n = 0, junk;
+***************
+*** 76,83 ****
+      action = GetNextToken(action, &tmp);
+      }
+  
+!   sprintf(tlabel,"CurrentDesk: %d%s",Scr.CurrentDesk,
+!           show_geometry ? "\tGeometry" : "");
+  
+    mr = NewMenuRoot(tlabel,0);
+    AddToMenu(mr, tlabel, "TITLE");      
+--- 78,86 ----
+      action = GetNextToken(action, &tmp);
+      }
+  
+!   sprintf(tlabel,"CurrentDesk: %d%s%s",Scr.CurrentDesk,
+!           show_geometry ? "\tGeometry" : "",
+! 	  fOnlyIcons ? "  (Only Icons)" : "");
+  
+    mr = NewMenuRoot(tlabel,0);
+    AddToMenu(mr, tlabel, "TITLE");      
+***************
+*** 115,120 ****
+--- 118,125 ----
+        {
+        if ((t->Desk == next_desk) && (!(t->flags & WINDOWLISTSKIP)))
+          {
++ 	if (fOnlyIcons && ! (t->flags & ICONIFIED))
++ 	  continue;
+  	if (++scut == ('9' + 1)) scut = 'A';	/* Next shortcut key */
+  
+  	if(use_icon_name)

@@ -1,0 +1,46 @@
+--- flashpath-0.2.1/linux/kernel.c	Wed May  3 21:21:40 2000
++++ flashpath-0.2.1-gjb/linux/kernel.c	Mon Jan  8 17:34:11 2001
+@@ -86,6 +86,43 @@
+ #endif
+ #endif
+ 
++#ifndef HAVE_LINUX_IGRAB
++static void __wait_on_inode(struct inode * inode)
++{
++	struct wait_queue wait = { current, NULL };
++
++	add_wait_queue(&inode->i_wait, &wait);
++repeat:
++	current->state = TASK_UNINTERRUPTIBLE;
++	if (inode->i_state & I_LOCK) {
++		schedule();
++		goto repeat;
++	}
++	remove_wait_queue(&inode->i_wait, &wait);
++	current->state = TASK_RUNNING;
++}
++
++static inline void wait_on_inode(struct inode *inode)
++{
++	if (inode->i_state & I_LOCK)
++		__wait_on_inode(inode);
++}
++
++static struct inode *igrab(struct inode *inode)
++{
++        spin_lock(&inode_lock);
++        if (inode->i_state & I_FREEING)
++                inode = NULL;
++        else
++                inode->i_count++;
++        spin_unlock(&inode_lock);
++        if (inode)
++                wait_on_inode(inode);
++        return inode;
++}
++#endif
++
++
+ #include "sdgen.h"
+ 
+ EXPORT_NO_SYMBOLS;

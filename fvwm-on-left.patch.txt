@@ -1,0 +1,72 @@
+
+From i-do-not-want-any-unsolicited-commercial-or-uncommercial-email@iki.fi Tue Jun 25 17:51:58 1996
+Date: Tue, 25 Jun 1996 20:04:20 +0300
+From: Lars Wirzenius
+     <i-do-not-want-any-unsolicited-commercial-or-uncommercial-email@iki.fi>
+To: fvwm-workers@hpc.uh.edu
+Subject: Re: Menus to the left 
+
+[ Note: I read this mailing list.  There is no need to CC me on replies,
+  unless it is _really_ urgent.  I pay for my PPP connections.  Thanks. ]
+
+Since the MIME attachment thingy didn't work, I'll repost (I'll try the
+MIME approach some other time; I understand that an attempt at fixing
+it was made, thanks).
+
+It still works.  I haven't exited fvwm since I started this patched version.
+:-)
+
+--- fvwm-2.0.42/fvwm/menus.c	Fri Apr  5 03:30:47 1996
++++ fvwm-2.0.42.local/fvwm/menus.c	Mon Jun 24 18:03:53 1996
+@@ -49,6 +49,8 @@
+ int mouse_moved = 0;
+ int menu_aborted = 0;
+ 
++int PrevActiveMenuX = -1;
++
+ extern XContext MenuContext;
+ /****************************************************************************
+  *
+@@ -66,6 +68,7 @@
+   int x,y;
+   Time t0;
+   extern Time lastTimestamp;
++  int PrevMenuX = PrevActiveMenuX;
+ 
+ 
+   /* this condition could get ugly */
+@@ -127,6 +130,7 @@
+     menu_aborted = 1;
+   else
+     menu_aborted = 0;
++  PrevActiveMenuX = PrevMenuX;
+   return retval;
+ }
+ 
+@@ -754,6 +758,10 @@
+ 	  menu->width +1;
+     }
+ 
++  if (PrevActiveMenuX != -1)
++      if (x + menu->width > Scr.MyDisplayWidth - 2) {
++          x = PrevActiveMenuX - menu->width + 2;
++      }
+   /* clip to screen */
+   if (x + menu->width > Scr.MyDisplayWidth-2) 
+     x = Scr.MyDisplayWidth - menu->width-2;
+@@ -771,6 +779,8 @@
+     }
+   if (y < 0) y = 0;
+ 
++  PrevActiveMenuX = x;
++  
+   MenuY = y;
+   XMoveWindow(dpy, menu->w, x, y);
+   XMapRaised(dpy, menu->w);
+
+
+--
+Visit the official FVWM web page at <URL:http://www.hpc.uh.edu/fvwm/>.
+To unsubscribe from the list, send "unsubscribe fvwm-workers" in the
+body of a message to majordomo@hpc.uh.edu.
+To report problems, send mail to fvwm-workers-owner@hpc.uh.edu.
